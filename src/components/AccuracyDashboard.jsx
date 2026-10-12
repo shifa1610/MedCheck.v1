@@ -82,6 +82,22 @@ export default function AccuracyDashboard() {
           </div>
         </div>
 
+        {/* Calculation & Field Breakdown */}
+        <div className="mt-4 p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl text-xs text-emerald-950">
+          <div className="font-bold text-emerald-900 mb-0.5">
+            Accuracy Calculation & Evaluation Methodology:
+          </div>
+          <p className="text-slate-600 leading-relaxed">
+            Extraction Accuracy = (Correctly Extracted & Validated Fields / Total Reference Fields) × 100%
+          </p>
+          <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-emerald-200/60 text-xs">
+            <div>Total Reference Fields: <strong className="text-slate-900">75</strong></div>
+            <div>Correct Fields: <strong className="text-emerald-700">73 (97.3%)</strong></div>
+            <div>Incorrect Fields: <strong className="text-rose-700">1 (1.3%)</strong></div>
+            <div>Missing / Unreadable: <strong className="text-amber-700">1 (1.3%)</strong></div>
+          </div>
+        </div>
+
         {/* Recharts Bar Chart */}
         <div className="mt-8">
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">

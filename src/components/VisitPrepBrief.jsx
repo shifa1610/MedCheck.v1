@@ -199,7 +199,7 @@ export default function VisitPrepBrief({ patient, records }) {
             <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
             <span>Not a prescription or diagnosis. For personal health comprehension and doctor appointment preparation only.</span>
           </div>
-          <span className="font-mono">MedCheck v1.0 • Altrix Labs Hackathon</span>
+          <span className="font-mono">MedCheck • Altrix Labs Hackathon</span>
         </div>
 
       </div>

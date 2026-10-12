@@ -129,13 +129,74 @@ export default function AbhaLocker({ patient, records, setRecords, language }) {
           </div>
         </div>
 
+        {/* Student Project Demonstration Disclaimer Banner */}
+        <div className="mt-4 p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">
+          <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <div className="leading-relaxed">
+            <strong>Educational Demonstration Disclaimer:</strong> This module illustrates the data architecture of India's Ayushman Bharat Digital Mission (ABDM) and Fast Healthcare Interoperability Resources (FHIR R4). All ABHA numbers, OTP flows, and patient tokens shown are mock demo data. Live government ABDM integration requires official Sandbox certificates and certified cryptographic hardware.
+          </div>
+        </div>
+
+        {/* Record Locker Interface (Listing available records & source) */}
+        <div className="mt-6 bg-slate-50 border border-slate-200 rounded-2xl p-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+            <div>
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                <FileCheck className="w-4 h-4 text-emerald-600" />
+                Available Health Records Locker ({records.length})
+              </h3>
+              <p className="text-[11px] text-slate-500">Records currently indexed for {patient.name} with source provenance</p>
+            </div>
+            <button
+              onClick={handleDownloadFhir}
+              className="text-xs text-emerald-700 hover:text-emerald-900 font-bold flex items-center gap-1 cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export All as FHIR R4 Bundle</span>
+            </button>
+          </div>
+
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-white text-slate-500 font-semibold border-b border-slate-200">
+                <tr>
+                  <th className="py-2 px-3">Record Title</th>
+                  <th className="py-2 px-3">Source Facility</th>
+                  <th className="py-2 px-3">Clinician</th>
+                  <th className="py-2 px-3">Date</th>
+                  <th className="py-2 px-3">FHIR Resource</th>
+                  <th className="py-2 px-3 text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {records.map((r, i) => (
+                  <tr key={i} className="hover:bg-white/80 transition-colors">
+                    <td className="py-2 px-3 font-bold text-slate-900">{r.title}</td>
+                    <td className="py-2 px-3 text-slate-600">{r.facility || 'Verified Clinic'}</td>
+                    <td className="py-2 px-3 text-slate-600">{r.doctor || 'Registered Physician'}</td>
+                    <td className="py-2 px-3 text-slate-500 font-mono text-[11px]">{r.date}</td>
+                    <td className="py-2 px-3 text-emerald-800 font-mono text-[11px]">
+                      {r.type === 'prescription' ? 'MedicationRequest' : 'DiagnosticReport'}
+                    </td>
+                    <td className="py-2 px-3 text-right">
+                      <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200">
+                        ABDM Ready (Mock)
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         {statusMessage && (
           <div className="mt-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
               <span>{statusMessage}</span>
             </div>
-            <button onClick={() => setStatusMessage('')} className="text-emerald-700 hover:text-emerald-900 text-xs font-bold">Dismiss</button>
+            <button onClick={() => setStatusMessage('')} className="text-emerald-700 hover:text-emerald-900 text-xs font-bold cursor-pointer">Dismiss</button>
           </div>
         )}
 

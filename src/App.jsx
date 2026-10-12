@@ -21,10 +21,7 @@ import {
   INITIAL_RECORDS, 
   PAPA_RECORDS, 
   MAA_RECORDS, 
-  SELF_RECORDS,
-  PAPA_TREND_SERIES,
-  MAA_TREND_SERIES,
-  SELF_TREND_SERIES
+  SELF_RECORDS 
 } from './data/mockRecords';
 import { TRANSLATIONS } from './data/translations';
 import { 
@@ -37,6 +34,7 @@ import {
   Upload, 
   Sparkles,
   ArrowRight, 
+  ArrowLeft,
   TrendingUp,
   FileText,
   Printer,
@@ -44,8 +42,103 @@ import {
   CheckSquare,
   GitCompare,
   Users,
-  Volume2
+  Volume2,
+  Languages,
+  Presentation,
+  Check
 } from 'lucide-react';
+
+// The 11 core feature cards required on the main dashboard
+const FEATURE_MODULES = [
+  {
+    id: 'dashboard',
+    title: "Health Dashboard",
+    description: "Summary of patient health records, vital indicators, recent clinical activity, and record statistics.",
+    icon: HeartPulse,
+    badge: "Module 1",
+    tag: "Core Overview"
+  },
+  {
+    id: 'compare',
+    title: "Compare & Flag Conflicts",
+    description: "Compare prescriptions across dates to flag dosage changes, drug interactions, and conflicting medicines.",
+    icon: GitCompare,
+    badge: "Module 2",
+    tag: "Safety Check"
+  },
+  {
+    id: 'verify',
+    title: "Verify Review",
+    description: "Review extracted doctor notes, correct medicine names, and confirm data with original document evidence.",
+    icon: CheckSquare,
+    badge: "Module 3",
+    tag: "Human-in-the-Loop"
+  },
+  {
+    id: 'timeline',
+    title: "Records Timeline",
+    description: "Chronological history of all medical visits, prescriptions, and lab reports with date & type filters.",
+    icon: FileText,
+    badge: "Module 4",
+    tag: "History"
+  },
+  {
+    id: 'trends',
+    title: "Biomarker Trends",
+    description: "Visual charts of blood sugar, HbA1c, cholesterol, and BP over time against laboratory reference bounds.",
+    icon: TrendingUp,
+    badge: "Module 5",
+    tag: "Serial Charts"
+  },
+  {
+    id: 'medications',
+    title: "Medications",
+    description: "Active medication list, strength, frequency, timings (morning, afternoon, night), and food instructions.",
+    icon: Pill,
+    badge: "Module 6",
+    tag: "Prescriptions"
+  },
+  {
+    id: 'converter',
+    title: "Language & Voice",
+    description: "Translate medical advice into 8 Indian regional languages with clear text-to-speech voice pronunciation.",
+    icon: Languages,
+    badge: "Module 7",
+    tag: "8 Languages"
+  },
+  {
+    id: 'visitprep',
+    title: "Visit-Prep Brief",
+    description: "Generate a concise 1-page summary with history, active meds, and questions to ask your doctor.",
+    icon: Printer,
+    badge: "Module 8",
+    tag: "Doctor Visit"
+  },
+  {
+    id: 'accuracy',
+    title: "Accuracy Benchmark",
+    description: "Compare extraction accuracy against verified clinical ground truth test datasets with precision metrics.",
+    icon: Award,
+    badge: "Module 9",
+    tag: "Evaluation"
+  },
+  {
+    id: 'slides',
+    title: "Demo Slides",
+    description: "Slide deck presenting project problem statement, architecture, implementation workflow, and future scope.",
+    icon: Presentation,
+    badge: "Module 10",
+    tag: "Presentation"
+  },
+  {
+    id: 'abha',
+    title: "ABHA & FHIR Locker",
+    description: "Understand national health-record interoperability and inspect standard ABDM FHIR R4 JSON bundles.",
+    icon: ShieldCheck,
+    badge: "Module 11",
+    tag: "ABDM Standards"
+  }
+];
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState('dashboard');
@@ -91,18 +184,20 @@ export default function App() {
     setRecords(prev => [verifiedRecord, ...prev]);
     setPendingVerificationRecord(null);
     setCurrentTab('timeline');
-    setToastMessage(`✓ Record confirmed and saved as ABDM FHIR resource!`);
-    setTimeout(() => setToastMessage(''), 6000);
+    setToastMessage(`✓ Record confirmed and saved to health timeline!`);
+    setTimeout(() => setToastMessage(''), 5000);
   };
+
+  const currentModule = FEATURE_MODULES.find(m => m.id === currentTab);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-['Plus_Jakarta_Sans',sans-serif]">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-5 py-3.5 rounded-2xl shadow-2xl border border-slate-800 flex items-center gap-3 text-xs animate-in slide-in-from-bottom-5">
-          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+        <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-lg border border-slate-800 flex items-center gap-2.5 text-xs animate-in slide-in-from-bottom-5">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
           <span>{toastMessage}</span>
-          <button onClick={() => setToastMessage('')} className="ml-2 text-slate-400 hover:text-white font-bold">✕</button>
+          <button onClick={() => setToastMessage('')} className="ml-2 text-slate-400 hover:text-white font-bold cursor-pointer">✕</button>
         </div>
       )}
 
@@ -120,124 +215,175 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         
-        {/* Verification Screen Modal or Tab */}
-        {currentTab === 'verify' && pendingVerificationRecord && (
-          <VerifyScreen
-            rawExtractedData={pendingVerificationRecord}
-            onConfirmSave={handleVerifyConfirmed}
-            onCancel={() => {
-              setPendingVerificationRecord(null);
-              setCurrentTab('dashboard');
-            }}
-            language={language}
-          />
-        )}
+        {/* Breadcrumb Bar when viewing any non-dashboard tab */}
+        {currentTab !== 'dashboard' && (
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3 bg-white border border-emerald-100 rounded-xl px-4 py-2.5 shadow-2xs">
+            <div className="flex items-center gap-2 text-xs">
+              <button 
+                onClick={() => setCurrentTab('dashboard')} 
+                className="text-emerald-700 hover:text-emerald-900 font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                title="Return to main dashboard"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Dashboard</span>
+              </button>
+              <span className="text-slate-300">/</span>
+              <span className="text-slate-800 font-bold">
+                {currentModule?.title || currentTab}
+              </span>
+              {currentModule?.badge && (
+                <span className="text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded font-semibold ml-1">
+                  {currentModule.badge}
+                </span>
+              )}
+            </div>
 
-        {currentTab === 'verify' && !pendingVerificationRecord && (
-          <div className="bg-white rounded-3xl border border-slate-200 p-10 text-center space-y-4">
-            <div className="w-14 h-14 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center mx-auto">
-              <CheckSquare className="w-7 h-7" />
-            </div>
-            <h2 className="text-lg font-bold text-slate-900">No Pending Clinical Records for Review</h2>
-            <p className="text-xs text-slate-500 max-w-md mx-auto">
-              Upload a prescription or lab report to experience MedCheck's side-by-side verification workflow with confidence scoring and candidate drug suggestions.
-            </p>
-            <div className="flex justify-center gap-3 pt-2">
-              <button
-                onClick={() => setIsUploadOpen(true)}
-                className="bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors"
-              >
-                + Upload or Test Sample
-              </button>
-              <button
-                onClick={() => handleRawRecordExtracted(records[1] || records[0])}
-                className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold px-4 py-2 rounded-xl transition-colors"
-              >
-                Review Sample Rx (Bilingual)
-              </button>
-            </div>
+            <button 
+              onClick={() => setCurrentTab('dashboard')}
+              className="text-xs text-slate-500 hover:text-slate-800 font-medium cursor-pointer"
+            >
+              ✕ Back to Dashboard
+            </button>
           </div>
         )}
 
-        {/* Tab: Dashboard */}
+        {/* 1. Health Dashboard Tab */}
         {currentTab === 'dashboard' && (
-          <div className="mb-8 space-y-6">
+          <div className="space-y-6">
             
-            {/* Family Caregiver Context Banner */}
-            <div className="bg-gradient-to-r from-teal-900 via-slate-900 to-sky-950 text-white rounded-3xl p-5 sm:p-6 shadow-md border border-teal-800/40">
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-teal-500/20 border border-teal-400/30 text-2xl flex items-center justify-center shrink-0">
+            {/* Student Project Context Banner */}
+            <div className="bg-emerald-800 text-white rounded-2xl p-5 border border-emerald-700 shadow-xs">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-start gap-3.5">
+                  <div className="w-11 h-11 rounded-xl bg-emerald-700/80 border border-emerald-600 text-xl flex items-center justify-center shrink-0">
                     {patient.avatarIcon || "👨‍🦳"}
                   </div>
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="bg-teal-400 text-slate-950 text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full tracking-wider">
-                        Family Caregiver Mode
+                      <span className="bg-emerald-900 text-emerald-200 text-[10px] font-bold uppercase px-2 py-0.5 rounded border border-emerald-700">
+                        Caregiver Healthcare Project
                       </span>
-                      <span className="text-xs text-teal-200">
-                        Managing {patient.relation}: <strong>{patient.name}</strong> ({patient.age}y)
+                      <span className="text-xs text-emerald-100 font-medium">
+                        Patient Profile: <strong>{patient.name}</strong> ({patient.relation}, {patient.age}y)
                       </span>
                     </div>
-                    <p className="text-xs text-slate-300 mt-1.5 max-w-2xl leading-relaxed">
-                      {patient.caregiverSummary || "MedCheck helps you organize and understand health records in simple language, with voice, and flags conflicting doses across medical papers without ever diagnosing."}
+                    <p className="text-xs text-emerald-100/90 mt-1 max-w-2xl leading-relaxed">
+                      MEDCHECK organizes medical records, explains clinical terms in regional languages, flags conflicting doses, and assists in doctor visit preparation.
                     </p>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
                   <button
                     onClick={() => setCurrentTab('compare')}
-                    className="inline-flex items-center gap-2 bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-extrabold px-3.5 py-2.5 rounded-xl transition-all shadow-sm"
+                    className="inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-semibold px-3 py-2 rounded-lg transition-colors cursor-pointer border border-emerald-600"
                   >
-                    <GitCompare className="w-4 h-4 text-amber-950" />
-                    <span>Compare Documents & Conflicts</span>
+                    <GitCompare className="w-3.5 h-3.5 text-emerald-300" />
+                    <span>Check Conflicts</span>
                   </button>
 
                   <button
-                    onClick={() => setCurrentTab('converter')}
-                    className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold px-3.5 py-2.5 rounded-xl border border-white/20 transition-all"
+                    onClick={() => setCurrentTab('visitprep')}
+                    className="inline-flex items-center gap-1.5 bg-white text-emerald-900 hover:bg-emerald-50 text-xs font-bold px-3 py-2 rounded-lg transition-colors cursor-pointer shadow-xs"
                   >
-                    <Volume2 className="w-4 h-4 text-teal-300" />
-                    <span>Regional Voice</span>
+                    <Printer className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>Visit Brief</span>
                   </button>
                 </div>
               </div>
             </div>
 
+            {/* SECTION: 11 Features & Modules Grid */}
+            <section className="space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-1">
+                <div>
+                  <h2 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-emerald-600" />
+                    <span>MEDCHECK Features & Modules</span>
+                    <span className="text-xs font-semibold bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded-full border border-emerald-200">
+                      11 Modules
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Click any module card below to open its dedicated healthcare tool or review records
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {FEATURE_MODULES.map((card, idx) => {
+                  const Icon = card.icon;
+                  return (
+                    <div
+                      key={card.id}
+                      onClick={() => setCurrentTab(card.id)}
+                      className="group bg-white rounded-xl border border-slate-200 hover:border-emerald-400 p-4 shadow-2xs hover:shadow-md transition-all cursor-pointer flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-2.5">
+                          <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                            <Icon className="w-4 h-4" />
+                          </div>
+                          <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                            #{idx + 1}
+                          </span>
+                        </div>
+                        <h3 className="text-xs sm:text-sm font-bold text-slate-900 group-hover:text-emerald-800 transition-colors">
+                          {card.title}
+                        </h3>
+                        <p className="text-xs text-slate-600 mt-1 line-clamp-2 leading-relaxed">
+                          {card.description}
+                        </p>
+                      </div>
+
+                      <div className="mt-3.5 pt-2.5 border-t border-slate-100 flex items-center justify-between">
+                        <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded">
+                          {card.tag}
+                        </span>
+                        <span className="text-xs font-semibold text-emerald-700 group-hover:text-emerald-900 flex items-center gap-1 group-hover:translate-x-0.5 transition-all">
+                          <span>Open</span>
+                          <ArrowRight className="w-3 h-3" />
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
             {/* Top Patient Profile Card */}
-            <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-sm">
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
                 {/* Left: Patient Info */}
                 <div className="flex items-start gap-4">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-700 text-white font-bold text-xl flex items-center justify-center shadow-lg shadow-teal-500/20">
+                  <div className="w-12 h-12 rounded-xl bg-emerald-600 text-white font-bold text-lg flex items-center justify-center shadow-xs">
                     {patient.name.split(' ').map(n => n[0]).join('')}
                   </div>
                   <div>
-                    <div className="flex items-center gap-2.5">
-                      <h1 className="text-xl font-bold text-slate-900">{patient.name}</h1>
-                      <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        ABDM-Ready (Mock ABHA)
+                    <div className="flex items-center gap-2">
+                      <h1 className="text-lg sm:text-xl font-bold text-slate-900">{patient.name}</h1>
+                      <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3" />
+                        <span>Verified Profile</span>
                       </span>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-xs text-slate-500">
-                      <span>{patient.age} {t.patient?.yearsOld || "years"} • {patient.gender}</span>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-slate-500">
+                      <span>{patient.age} years • {patient.gender}</span>
                       <span>•</span>
-                      <span>{t.patient?.bloodGroup || "Blood Group"}: <strong className="text-slate-800">{patient.bloodGroup}</strong></span>
+                      <span>Blood Group: <strong className="text-slate-700">{patient.bloodGroup}</strong></span>
                       <span>•</span>
-                      <span className="font-mono text-slate-700">{patient.abhaAddress}</span>
+                      <span className="font-mono text-slate-700">ABHA: {patient.abhaId}</span>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
-                      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1">
-                        {t.patient?.activeConditions || "Active Conditions"}:
+                    <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                      <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mr-1">
+                        Active Conditions:
                       </span>
                       {patient.activeConditions.map((cond, i) => (
-                        <span key={i} className="bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-medium px-2 py-0.5 rounded-md">
+                        <span key={i} className="bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-medium px-2 py-0.5 rounded">
                           {cond}
                         </span>
                       ))}
@@ -245,155 +391,161 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Right: Quick Action Cards */}
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <button
-                    onClick={() => setCurrentTab('visitprep')}
-                    className="inline-flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-3.5 py-2.5 rounded-xl transition-all shadow-xs"
-                  >
-                    <Printer className="w-4 h-4" />
-                    <span>Visit-Prep Brief</span>
-                  </button>
-
-                  <button
-                    onClick={() => setCurrentTab('accuracy')}
-                    className="inline-flex items-center gap-2 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 text-xs font-bold px-3.5 py-2.5 rounded-xl transition-colors"
-                  >
-                    <Award className="w-4 h-4 text-teal-600" />
-                    <span>Accuracy Benchmark</span>
-                  </button>
-
-                  <button
-                    onClick={() => setCurrentTab('copilot')}
-                    className="inline-flex items-center gap-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white text-xs font-bold px-3.5 py-2.5 rounded-xl shadow-xs transition-all"
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    <span>Ask Copilot</span>
-                  </button>
+                {/* Right: Record Statistics */}
+                <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">
+                  <div>
+                    <div className="font-bold text-slate-900 text-base">{records.length}</div>
+                    <div className="text-[10px] text-slate-500">Stored Records</div>
+                  </div>
+                  <div className="w-px h-7 bg-slate-200" />
+                  <div>
+                    <div className="font-bold text-emerald-700 text-base">
+                      {records.reduce((acc, r) => acc + (r.medications?.length || 0), 0)}
+                    </div>
+                    <div className="text-[10px] text-slate-500">Total Medications</div>
+                  </div>
+                  <div className="w-px h-7 bg-slate-200" />
+                  <div>
+                    <div className="font-bold text-teal-700 text-base">8</div>
+                    <div className="text-[10px] text-slate-500">Languages Ready</div>
+                  </div>
                 </div>
               </div>
 
-              {/* Vitals Quick Gauge Row */}
-              <div className="mt-6 pt-5 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {currentFamilyKey === 'papa' && (
-                  <>
-                    <div className="bg-rose-50/60 border border-rose-200/80 rounded-2xl p-3.5">
-                      <div className="flex items-center justify-between text-xs text-rose-800 font-semibold mb-1">
-                        <span>HbA1c (3-Mo Sugar)</span>
-                        <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-                      </div>
-                      <div className="text-xl font-extrabold text-rose-900">8.2 %</div>
-                      <div className="text-[10px] text-rose-700 font-medium mt-1">Above Printed Ref (&lt; 5.7%)</div>
-                    </div>
+              {/* Vitals Quick Gauge Row (Labeled as Demo Data) */}
+              <div className="mt-5 pt-4 border-t border-slate-100">
+                <div className="flex items-center justify-between mb-2.5">
+                  <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <Activity className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Recent Vital Indicators & Lab Findings</span>
+                    <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                      Demo Data
+                    </span>
+                  </span>
+                  <span className="text-[11px] text-slate-400">Apollo Diagnostics • Latest report</span>
+                </div>
 
-                    <div className="bg-rose-50/60 border border-rose-200/80 rounded-2xl p-3.5">
-                      <div className="flex items-center justify-between text-xs text-rose-800 font-semibold mb-1">
-                        <span>Fasting Blood Sugar</span>
-                        <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {currentFamilyKey === 'papa' && (
+                    <>
+                      <div className="bg-rose-50/70 border border-rose-200 rounded-xl p-3">
+                        <div className="flex items-center justify-between text-xs text-rose-800 font-semibold mb-0.5">
+                          <span>HbA1c (3-Mo Sugar)</span>
+                          <AlertTriangle className="w-3 h-3 text-rose-600" />
+                        </div>
+                        <div className="text-lg font-bold text-rose-950">8.2 %</div>
+                        <div className="text-[10px] text-rose-700">Above Ref (&lt; 5.7%)</div>
                       </div>
-                      <div className="text-xl font-extrabold text-rose-900">142 mg/dL</div>
-                      <div className="text-[10px] text-rose-700 font-medium mt-1">Above Printed Ref (70-100)</div>
-                    </div>
 
-                    <div className="bg-amber-50/60 border border-amber-200/80 rounded-2xl p-3.5">
-                      <div className="flex items-center justify-between text-xs text-amber-800 font-semibold mb-1">
-                        <span>LDL Bad Cholesterol</span>
-                        <Activity className="w-3.5 h-3.5 text-amber-600" />
+                      <div className="bg-rose-50/70 border border-rose-200 rounded-xl p-3">
+                        <div className="flex items-center justify-between text-xs text-rose-800 font-semibold mb-0.5">
+                          <span>Fasting Blood Sugar</span>
+                          <AlertTriangle className="w-3 h-3 text-rose-600" />
+                        </div>
+                        <div className="text-lg font-bold text-rose-950">142 mg/dL</div>
+                        <div className="text-[10px] text-rose-700">Above Ref (70-100)</div>
                       </div>
-                      <div className="text-xl font-extrabold text-amber-900">154 mg/dL</div>
-                      <div className="text-[10px] text-amber-700 font-medium mt-1">Above Printed Ref (&lt; 100)</div>
-                    </div>
 
-                    <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-2xl p-3.5">
-                      <div className="flex items-center justify-between text-xs text-emerald-800 font-semibold mb-1">
-                        <span>Kidney Creatinine</span>
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-3">
+                        <div className="flex items-center justify-between text-xs text-amber-800 font-semibold mb-0.5">
+                          <span>LDL Cholesterol</span>
+                          <Activity className="w-3 h-3 text-amber-600" />
+                        </div>
+                        <div className="text-lg font-bold text-amber-950">154 mg/dL</div>
+                        <div className="text-[10px] text-amber-700">Above Ref (&lt; 100)</div>
                       </div>
-                      <div className="text-xl font-extrabold text-emerald-900">1.05 mg/dL</div>
-                      <div className="text-[10px] text-emerald-700 font-medium mt-1">Within Printed Ref (0.7 - 1.3)</div>
-                    </div>
-                  </>
-                )}
 
-                {currentFamilyKey === 'maa' && (
-                  <>
-                    <div className="bg-rose-50/60 border border-rose-200/80 rounded-2xl p-3.5">
-                      <div className="flex items-center justify-between text-xs text-rose-800 font-semibold mb-1">
-                        <span>TSH (Thyroid)</span>
-                        <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                      <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3">
+                        <div className="flex items-center justify-between text-xs text-emerald-800 font-semibold mb-0.5">
+                          <span>Kidney Creatinine</span>
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        </div>
+                        <div className="text-lg font-bold text-emerald-950">1.05 mg/dL</div>
+                        <div className="text-[10px] text-emerald-700">Within Ref (0.7-1.3)</div>
                       </div>
-                      <div className="text-xl font-extrabold text-rose-900">7.8 uIU/mL</div>
-                      <div className="text-[10px] text-rose-700 font-medium mt-1">Elevated Ref (0.4 - 4.2)</div>
-                    </div>
+                    </>
+                  )}
 
-                    <div className="bg-amber-50/60 border border-amber-200/80 rounded-2xl p-3.5">
-                      <div className="flex items-center justify-between text-xs text-amber-800 font-semibold mb-1">
-                        <span>Vitamin D Total</span>
-                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                  {currentFamilyKey === 'maa' && (
+                    <>
+                      <div className="bg-rose-50/70 border border-rose-200 rounded-xl p-3">
+                        <div className="flex items-center justify-between text-xs text-rose-800 font-semibold mb-0.5">
+                          <span>TSH (Thyroid)</span>
+                          <AlertTriangle className="w-3 h-3 text-rose-600" />
+                        </div>
+                        <div className="text-lg font-bold text-rose-950">7.8 uIU/mL</div>
+                        <div className="text-[10px] text-rose-700">Elevated (0.4 - 4.2)</div>
                       </div>
-                      <div className="text-xl font-extrabold text-amber-900">14.2 ng/mL</div>
-                      <div className="text-[10px] text-amber-700 font-medium mt-1">Deficient Ref (30 - 100)</div>
-                    </div>
 
-                    <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-2xl p-3.5">
-                      <div className="flex items-center justify-between text-xs text-emerald-800 font-semibold mb-1">
-                        <span>Serum Calcium</span>
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-3">
+                        <div className="flex items-center justify-between text-xs text-amber-800 font-semibold mb-0.5">
+                          <span>Vitamin D Total</span>
+                          <AlertTriangle className="w-3 h-3 text-amber-600" />
+                        </div>
+                        <div className="text-lg font-bold text-amber-950">14.2 ng/mL</div>
+                        <div className="text-[10px] text-amber-700">Deficient (30 - 100)</div>
                       </div>
-                      <div className="text-xl font-extrabold text-emerald-900">9.2 mg/dL</div>
-                      <div className="text-[10px] text-emerald-700 font-medium mt-1">Normal Ref (8.5 - 10.5)</div>
-                    </div>
 
-                    <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-2xl p-3.5">
-                      <div className="flex items-center justify-between text-xs text-emerald-800 font-semibold mb-1">
-                        <span>Blood Pressure</span>
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3">
+                        <div className="flex items-center justify-between text-xs text-emerald-800 font-semibold mb-0.5">
+                          <span>Serum Calcium</span>
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        </div>
+                        <div className="text-lg font-bold text-emerald-950">9.2 mg/dL</div>
+                        <div className="text-[10px] text-emerald-700">Normal (8.5 - 10.5)</div>
                       </div>
-                      <div className="text-xl font-extrabold text-emerald-900">130/84 mmHg</div>
-                      <div className="text-[10px] text-emerald-700 font-medium mt-1">Controlled</div>
-                    </div>
-                  </>
-                )}
 
-                {currentFamilyKey === 'self' && (
-                  <>
-                    <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-2xl p-3.5">
-                      <div className="flex items-center justify-between text-xs text-emerald-800 font-semibold mb-1">
-                        <span>HbA1c</span>
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3">
+                        <div className="flex items-center justify-between text-xs text-emerald-800 font-semibold mb-0.5">
+                          <span>Blood Pressure</span>
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        </div>
+                        <div className="text-lg font-bold text-emerald-950">130/84 mmHg</div>
+                        <div className="text-[10px] text-emerald-700">Controlled</div>
                       </div>
-                      <div className="text-xl font-extrabold text-emerald-900">5.2 %</div>
-                      <div className="text-[10px] text-emerald-700 font-medium mt-1">Optimal (&lt; 5.7%)</div>
-                    </div>
+                    </>
+                  )}
 
-                    <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-2xl p-3.5">
-                      <div className="flex items-center justify-between text-xs text-emerald-800 font-semibold mb-1">
-                        <span>Fasting Glucose</span>
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  {currentFamilyKey === 'self' && (
+                    <>
+                      <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3">
+                        <div className="flex items-center justify-between text-xs text-emerald-800 font-semibold mb-0.5">
+                          <span>HbA1c</span>
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        </div>
+                        <div className="text-lg font-bold text-emerald-950">5.2 %</div>
+                        <div className="text-[10px] text-emerald-700">Optimal (&lt; 5.7%)</div>
                       </div>
-                      <div className="text-xl font-extrabold text-emerald-900">88 mg/dL</div>
-                      <div className="text-[10px] text-emerald-700 font-medium mt-1">Optimal (70-100)</div>
-                    </div>
 
-                    <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-2xl p-3.5">
-                      <div className="flex items-center justify-between text-xs text-emerald-800 font-semibold mb-1">
-                        <span>Blood Pressure</span>
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3">
+                        <div className="flex items-center justify-between text-xs text-emerald-800 font-semibold mb-0.5">
+                          <span>Fasting Glucose</span>
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        </div>
+                        <div className="text-lg font-bold text-emerald-950">88 mg/dL</div>
+                        <div className="text-[10px] text-emerald-700">Optimal (70-100)</div>
                       </div>
-                      <div className="text-xl font-extrabold text-emerald-900">118/76 mmHg</div>
-                      <div className="text-[10px] text-emerald-700 font-medium mt-1">Optimal Healthy</div>
-                    </div>
 
-                    <div className="bg-amber-50/60 border border-amber-200/80 rounded-2xl p-3.5">
-                      <div className="flex items-center justify-between text-xs text-amber-800 font-semibold mb-1">
-                        <span>Vitamin D</span>
-                        <Activity className="w-3.5 h-3.5 text-amber-600" />
+                      <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3">
+                        <div className="flex items-center justify-between text-xs text-emerald-800 font-semibold mb-0.5">
+                          <span>Blood Pressure</span>
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        </div>
+                        <div className="text-lg font-bold text-emerald-950">118/76 mmHg</div>
+                        <div className="text-[10px] text-emerald-700">Optimal Healthy</div>
                       </div>
-                      <div className="text-xl font-extrabold text-amber-900">22.4 ng/mL</div>
-                      <div className="text-[10px] text-amber-700 font-medium mt-1">Mild Insufficiency</div>
-                    </div>
-                  </>
-                )}
+
+                      <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-3">
+                        <div className="flex items-center justify-between text-xs text-amber-800 font-semibold mb-0.5">
+                          <span>Vitamin D</span>
+                          <Activity className="w-3 h-3 text-amber-600" />
+                        </div>
+                        <div className="text-lg font-bold text-amber-950">22.4 ng/mL</div>
+                        <div className="text-[10px] text-amber-700">Mild Insufficiency</div>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -401,15 +553,15 @@ export default function App() {
             <HealthSummary records={records} patient={patient} language={language} />
 
             {/* Recent Timeline Preview */}
-            <div className="pt-2">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-teal-600" />
+            <div className="pt-1">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-emerald-600" />
                   Recent Health Timeline for {patient.name}
                 </h3>
                 <button
                   onClick={() => setCurrentTab('timeline')}
-                  className="text-xs font-bold text-teal-700 hover:text-teal-900 hover:underline flex items-center gap-1"
+                  className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 flex items-center gap-1 cursor-pointer"
                 >
                   <span>View All Records ({records.length})</span>
                   <ArrowRight className="w-3.5 h-3.5" />
@@ -420,7 +572,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Tab: Medicine Conflict & Difference Scanner */}
+        {/* 2. Compare & Flag Conflicts */}
         {currentTab === 'compare' && (
           <MedicineConflictDetector 
             currentFamilyKey={currentFamilyKey}
@@ -429,54 +581,67 @@ export default function App() {
           />
         )}
 
-        {/* Tab: Full Timeline */}
+        {/* 3. Verify Review Screen */}
+        {currentTab === 'verify' && (
+          <VerifyScreen
+            rawExtractedData={pendingVerificationRecord}
+            onConfirmSave={handleVerifyConfirmed}
+            onCancel={() => {
+              setPendingVerificationRecord(null);
+              setCurrentTab('dashboard');
+            }}
+            language={language}
+            isModal={false}
+          />
+        )}
+
+        {/* 4. Records Timeline */}
         {currentTab === 'timeline' && (
           <HealthTimeline records={records} patient={patient} language={language} />
         )}
 
-        {/* Tab: Biomarker Longitudinal Trends */}
+        {/* 5. Biomarker Trends */}
         {currentTab === 'trends' && (
           <BiomarkerTrends language={language} currentFamilyKey={currentFamilyKey} />
         )}
 
-        {/* Tab: Medications & Daily Schedule */}
+        {/* 6. Medications */}
         {currentTab === 'medications' && (
           <MedicationTracker records={records} language={language} />
         )}
 
-        {/* Tab: Language Converter & Voice Over */}
+        {/* 7. Language & Voice */}
         {currentTab === 'converter' && (
           <LanguageConverter />
         )}
 
-        {/* Tab: Physician Visit-Prep Brief */}
+        {/* 8. Visit-Prep Brief */}
         {currentTab === 'visitprep' && (
           <VisitPrepBrief patient={patient} records={records} />
         )}
 
-        {/* Tab: Accuracy Benchmark Dashboard */}
+        {/* 9. Accuracy Benchmark */}
         {currentTab === 'accuracy' && (
           <AccuracyDashboard />
         )}
 
-        {/* Tab: ABHA & ABDM FHIR Locker */}
+        {/* 10. Demo Slides */}
+        {currentTab === 'slides' && (
+          <PresentationSlides />
+        )}
+
+        {/* 11. ABHA & FHIR Locker */}
         {currentTab === 'abha' && (
           <AbhaLocker patient={patient} records={records} setRecords={setRecords} language={language} />
         )}
 
-        {/* Tab: Conversational Health Copilot */}
+        {/* Optional Secondary Tools */}
         {currentTab === 'copilot' && (
           <CopilotChat records={records} patient={patient} language={language} />
         )}
 
-        {/* Tab: System Architecture */}
         {currentTab === 'architecture' && (
           <ArchitectureView language={language} />
-        )}
-
-        {/* Tab: Presentation Slides for Judges */}
-        {currentTab === 'slides' && (
-          <PresentationSlides />
         )}
       </main>
 
@@ -489,21 +654,21 @@ export default function App() {
       />
 
       {/* Footer */}
-      <footer className="mt-16 bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-500 no-print">
+      <footer className="mt-12 bg-white border-t border-slate-200 py-5 text-center text-xs text-slate-500 no-print">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <HeartPulse className="w-4 h-4 text-teal-600" />
-            <span className="font-bold text-slate-800">MedCheck</span>
-            <span>• Built for Altrix Labs AI Innovation Challenge (Round 1 Hackathon)</span>
+            <HeartPulse className="w-4 h-4 text-emerald-600" />
+            <span className="font-bold text-slate-800">MEDCHECK</span>
+            <span>• Student Healthcare Project for Altrix Labs Innovation Challenge</span>
           </div>
-          <div className="flex items-center gap-4 text-slate-500 text-[11px]">
-            <span>Family Caregiver Engine</span>
+          <div className="flex items-center gap-3 text-slate-500 text-[11px]">
+            <span>11 Feature Modules</span>
             <span>•</span>
-            <span>Medicine Conflict Scanner</span>
+            <span>8 Indian Languages</span>
             <span>•</span>
             <span>Zero-Diagnosis Safe Protocol</span>
             <span>•</span>
-            <span>Hindi / Telugu / Tamil Voice</span>
+            <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">Demo Data</span>
           </div>
         </div>
       </footer>

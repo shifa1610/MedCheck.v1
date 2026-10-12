@@ -354,41 +354,101 @@ export default function PresentationSlides() {
       )
     },
     {
-      title: "Scoring Rubric Alignment (100% + Bonus)",
-      subtitle: "How MedCheck excels across every Altrix Labs judging criterion",
-      tag: "Evaluation Rubric Alignment",
+      title: "Project Objectives & Key Goals",
+      subtitle: "Bridging the gap between paper prescriptions and patient understanding",
+      tag: "Project Objectives",
       content: (
-        <div className="space-y-3 py-2">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-center">
-            <div className="p-2.5 bg-teal-50 border border-teal-200 rounded-xl">
-              <div className="text-base font-extrabold text-teal-800">35%</div>
-              <div className="text-[10px] font-bold uppercase text-teal-600 mt-0.5">AI Utilization</div>
-              <div className="text-[10px] text-teal-900 mt-1">98.1% OCR + Plain-Language</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 py-2">
+          <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl">
+            <h4 className="text-xs font-bold text-emerald-900 mb-1">1. Optical Extraction & Verification</h4>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Extract complex doctor handwriting and lab panels into clean JSON without hallucination using fuzzy matching against official drug formularies.
+            </p>
+          </div>
+          <div className="p-3.5 bg-sky-50/70 border border-sky-200 rounded-xl">
+            <h4 className="text-xs font-bold text-sky-900 mb-1">2. Medicine Conflict Detection</h4>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Cross-compare prescriptions across visit dates to highlight dosage changes, duplications, and potential drug-drug interactions.
+            </p>
+          </div>
+          <div className="p-3.5 bg-amber-50/70 border border-amber-200 rounded-xl">
+            <h4 className="text-xs font-bold text-amber-900 mb-1">3. Vernacular Accessibility</h4>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Explain medical instructions across 8 Indian languages (Hindi, Telugu, Tamil, Kannada, Malayalam, Marathi, Gujarati, English) with voice synthesis.
+            </p>
+          </div>
+          <div className="p-3.5 bg-purple-50/70 border border-purple-200 rounded-xl">
+            <h4 className="text-xs font-bold text-purple-900 mb-1">4. Doctor Visit Preparation</h4>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Consolidate fragmented health history into a clean 1-page visit-prep brief for concise review with consulting doctors.
+            </p>
+          </div>
+        </div>
+      )
+    },
+    {
+      title: "Sample Output & Clinical Workflow",
+      subtitle: "Demonstration of extracted prescription and longitudinal trend analysis",
+      tag: "Sample Output",
+      content: (
+        <div className="space-y-3 py-2 text-xs">
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+            <div className="font-bold text-slate-900 mb-1">Prescription Parsing Example:</div>
+            <div className="font-mono text-[11px] text-slate-700 bg-white p-2 rounded border border-slate-200 mb-2">
+              Input: "Tab Metformin 500mg 1-0-1 after food (भोजन के बाद), Tab Telmisartan 40mg 1-0-0"
             </div>
-            <div className="p-2.5 bg-sky-50 border border-sky-200 rounded-xl">
-              <div className="text-base font-extrabold text-sky-800">25%</div>
-              <div className="text-[10px] font-bold uppercase text-sky-600 mt-0.5">Architecture</div>
-              <div className="text-[10px] text-sky-900 mt-1">Clean FHIR R4 Pipeline</div>
-            </div>
-            <div className="p-2.5 bg-purple-50 border border-purple-200 rounded-xl">
-              <div className="text-base font-extrabold text-purple-800">20%</div>
-              <div className="text-[10px] font-bold uppercase text-purple-600 mt-0.5">User Experience</div>
-              <div className="text-[10px] text-purple-900 mt-1">Family Hub + Voice</div>
-            </div>
-            <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl">
-              <div className="text-base font-extrabold text-rose-800">10%</div>
-              <div className="text-[10px] font-bold uppercase text-rose-600 mt-0.5">Impact & Safety</div>
-              <div className="text-[10px] text-rose-900 mt-1">Zero-Diagnosis Guardrails</div>
-            </div>
-            <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl">
-              <div className="text-base font-extrabold text-emerald-800">+10 pts</div>
-              <div className="text-[10px] font-bold uppercase text-emerald-600 mt-0.5">Bonus Credits</div>
-              <div className="text-[10px] text-emerald-900 mt-1">ABDM + 8 Languages Audio</div>
+            <div className="text-emerald-800 font-medium">
+              Output: Metformin 500mg (BID, Post-Meal) + Telmisartan 40mg (OD, Morning). Matched against Indian Drug Catalog with 100% confidence.
             </div>
           </div>
-
-          <div className="bg-slate-900 text-white p-3.5 rounded-xl text-xs text-center font-medium">
-            "AI explains, doctors decide. Our edge is trust: unreadable lines are never guessed, medicine conflicts are immediately flagged, and nothing is altered without doctor confirmation."
+          <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-xl">
+            <div className="font-bold text-emerald-950 mb-1">Bilingual Voice & Vernacular Translation:</div>
+            <p className="text-slate-700 leading-relaxed">
+              Transformed into Telugu: <em>"భోజనం తర్వాత రోజుకు రెండుసార్లు మెట్‌ఫార్మిన్ 500mg 1 మాత్ర వేసుకోండి"</em> and spoken aloud via Web Speech / Cloud TTS audio stream.
+            </p>
+          </div>
+        </div>
+      )
+    },
+    {
+      title: "Project Limitations & Healthcare Guardrails",
+      subtitle: "Strict boundaries: AI explains and checks, but never diagnoses or prescribes",
+      tag: "Limitations & Safety",
+      content: (
+        <div className="space-y-3 py-2 text-xs">
+          <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-950 leading-relaxed">
+            <strong>1. Zero-Diagnosis Rule:</strong> MEDCHECK is strictly an assistive health record organizer. It does not provide medical diagnoses, treatment decisions, or autonomous prescription changes.
+          </div>
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-950 leading-relaxed">
+            <strong>2. OCR Quality Dependency:</strong> Severely degraded, crumpled, or illegible doctor handwriting is flagged as "Needs Human Review" rather than guessed by the model.
+          </div>
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 leading-relaxed">
+            <strong>3. ABDM Sandbox Mode:</strong> Real ABDM gateway integration requires formal government sandbox enrollment, RSA keys, and official hospital federation.
+          </div>
+        </div>
+      )
+    },
+    {
+      title: "Future Scope & B.Tech Project Roadmap",
+      subtitle: "Planned extensions for full production healthcare deployment",
+      tag: "Future Scope",
+      content: (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 py-2 text-xs">
+          <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs">
+            <h4 className="font-bold text-emerald-800 mb-1">1. Live ABDM Sandbox Integration</h4>
+            <p className="text-slate-600">Connect to National Health Authority (NHA) certified endpoints with M1/M2/M3 milestones for live ABHA verification.</p>
+          </div>
+          <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs">
+            <h4 className="font-bold text-emerald-800 mb-1">2. Offline On-Device OCR</h4>
+            <p className="text-slate-600">Integrate WebAssembly-compiled ONNX models for offline privacy-preserving prescription scanning directly in the browser.</p>
+          </div>
+          <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs">
+            <h4 className="font-bold text-emerald-800 mb-1">3. Pharmacy Refill Automation</h4>
+            <p className="text-slate-600">Sync active medication schedules with Jan Aushadhi generic drug stores to identify low-cost generic alternatives.</p>
+          </div>
+          <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs">
+            <h4 className="font-bold text-emerald-800 mb-1">4. Wearable Device Sync</h4>
+            <p className="text-slate-600">Ingest continuous glucose monitoring (CGM) and smart BP cuff data alongside episodic lab reports.</p>
           </div>
         </div>
       )
