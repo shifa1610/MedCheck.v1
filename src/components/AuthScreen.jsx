@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   Activity,
+  ArrowLeft,
   ArrowRight,
   FileHeart,
   HeartPulse,
@@ -11,12 +12,28 @@ import {
   Eye,
   EyeOff,
   CheckCircle2,
+  Quote,
   Lock,
   Mail,
   User,
   Zap
 } from 'lucide-react';
 import { loginUser, registerUser } from '../utils/auth';
+
+const careQuotes = [
+  {
+    quote: 'Good care begins with understanding, and grows stronger when families care together.',
+    author: 'The MedCheck promise'
+  },
+  {
+    quote: 'The greatest wealth is health.',
+    author: 'Virgil'
+  },
+  {
+    quote: 'A little care, shared every day, can make a world of difference.',
+    author: 'A reminder for families'
+  }
+];
 
 function HealthIllustration() {
   return (
@@ -25,17 +42,38 @@ function HealthIllustration() {
       <div className="relative overflow-hidden rounded-[2rem] border border-white/70 bg-gradient-to-br from-teal-950 via-teal-800 to-cyan-700 p-5 shadow-2xl sm:p-7">
         <div className="absolute -right-12 -top-16 h-48 w-48 rounded-full border border-white/10" />
         <div className="absolute -right-5 -top-9 h-36 w-36 rounded-full border border-white/10" />
-        <div className="relative flex items-center justify-between text-white">
-          <div className="flex items-center gap-2">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15">
-              <HeartPulse className="h-5 w-5" />
+        <div className="relative h-40 overflow-hidden rounded-2xl sm:h-48">
+          <img
+            src="https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=1200&q=85"
+            alt="A doctor speaking with a patient during a checkup"
+            className="h-full w-full object-cover object-center"
+            loading="lazy"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-teal-950/90 via-teal-900/50 to-transparent" />
+          <div className="absolute inset-y-0 left-0 flex max-w-[70%] flex-col justify-between p-4 text-white sm:p-5">
+            <span className="inline-flex w-fit items-center gap-2 rounded-full border border-white/25 bg-white/15 px-3 py-1.5 text-xs font-bold backdrop-blur">
+              <HeartPulse aria-hidden="true" className="h-4 w-4 text-teal-200" />
+              Health overview
             </span>
             <div>
-              <p className="text-sm font-bold">Health overview</p>
-              <p className="text-xs text-teal-100">Records, made easier to understand</p>
+              <p className="text-xl font-black leading-tight sm:text-2xl">A clearer picture of your health.</p>
+              <p className="mt-1 text-xs text-teal-50 sm:text-sm">Your records, all in one caring place.</p>
             </div>
           </div>
-          <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold">Preview</span>
+          <div className="absolute bottom-3 right-3 flex items-center gap-2 rounded-xl border border-white/70 bg-white/95 p-2 shadow-lg sm:bottom-4 sm:right-4">
+            <img
+              src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=96&h=96&q=80"
+              alt=""
+              className="h-9 w-9 rounded-lg object-cover"
+              loading="lazy"
+            />
+            <div className="pr-1">
+              <p className="text-[11px] font-extrabold text-slate-900">Care, connected</p>
+              <p className="flex items-center gap-1 text-[10px] font-semibold text-teal-800">
+                <ShieldCheck aria-hidden="true" className="h-3 w-3" /> Doctor-ready
+              </p>
+            </div>
+          </div>
         </div>
 
         <div className="relative mt-6 grid grid-cols-2 gap-3">
@@ -107,12 +145,13 @@ export default function AuthScreen({
   const [error, setError] = useState(initialError);
   const [success, setSuccess] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeQuote, setActiveQuote] = useState(0);
 
   const isRegister = mode === 'register';
 
   const validateEmail = (val) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
     setSuccess('');
@@ -134,47 +173,55 @@ export default function AuthScreen({
       return;
     }
 
-    if (isRegister) {
-      if (!fullName.trim()) {
-        setError('Please enter your full name.');
+    if (isRegister && !fullName.trim()) {
+      setError('Please enter your full name.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = isRegister
+        ? await registerUser(fullName, email, password)
+        : await loginUser(email, password);
+
+      if (!res.success) {
+        setError(res.error || (isRegister ? 'Failed to create account.' : 'Invalid email or password.'));
         return;
       }
-      setIsSubmitting(true);
-      const res = registerUser(fullName, email, password);
-      setIsSubmitting(false);
 
-      if (!res.success) {
-        setError(res.error || 'Failed to create account.');
-      } else {
-        setSuccess('✓ Account created successfully! Logging you in...');
-        setTimeout(() => {
-          onAuthenticated(res.user);
-        }, 1000);
-      }
-    } else {
-      setIsSubmitting(true);
-      const res = loginUser(email, password);
+      setSuccess(isRegister
+        ? '✓ Account created successfully! Logging you in...'
+        : res.offlineDemo
+          ? '✓ Database unavailable — opening the demo with sample records.'
+          : '✓ Login successful! Opening dashboard...');
+      setTimeout(() => onAuthenticated(res.user), isRegister ? 1000 : 600);
+    } catch (error) {
+      console.error('Authentication request failed:', error);
+      setError('Unable to complete sign in. Please try again.');
+    } finally {
       setIsSubmitting(false);
-
-      if (!res.success) {
-        setError(res.error || 'Invalid email or password.');
-      } else {
-        setSuccess('✓ Login successful! Opening dashboard...');
-        setTimeout(() => {
-          onAuthenticated(res.user);
-        }, 600);
-      }
     }
   };
 
   // Quick 1-click Demo Login
-  const handleQuickDemo = () => {
-    const res = loginUser('demo@medcheck.org', 'demo123');
-    if (res.success) {
-      setSuccess('✓ Entering demo mode as Rahul Sharma (Caregiver)...');
-      setTimeout(() => {
-        onAuthenticated(res.user);
-      }, 500);
+  const handleQuickDemo = async () => {
+    setError('');
+    setIsSubmitting(true);
+    try {
+      const res = await loginUser('demo@medcheck.org', 'demo123');
+      if (!res.success) {
+        setError(res.error || 'Unable to open demo mode.');
+        return;
+      }
+      setSuccess(res.offlineDemo
+        ? '✓ Database unavailable — opening the demo with sample records.'
+        : '✓ Entering the MedCheck demo...');
+      setTimeout(() => onAuthenticated(res.user), 500);
+    } catch (error) {
+      console.error('Demo sign in failed:', error);
+      setError('Unable to open demo mode. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -235,9 +282,51 @@ export default function AuthScreen({
           {/* Graphical Illustration Card */}
           <HealthIllustration />
 
-          <blockquote className="max-w-lg border-l-4 border-teal-600 pl-4 text-base font-semibold leading-relaxed text-slate-800 sm:text-lg">
-            “Good care begins with understanding, and grows stronger when families care together.”
-          </blockquote>
+          <div className="max-w-lg rounded-2xl border border-teal-100 bg-white/80 p-4 shadow-sm sm:p-5">
+            <div className="flex items-start gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-teal-800">
+                <Quote aria-hidden="true" className="h-4 w-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <blockquote aria-live="polite" className="text-sm font-semibold leading-relaxed text-slate-800 sm:text-base">
+                  “{careQuotes[activeQuote].quote}”
+                </blockquote>
+                <p className="mt-2 text-xs font-bold text-teal-800">{careQuotes[activeQuote].author}</p>
+              </div>
+              <div className="flex shrink-0 gap-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveQuote((activeQuote - 1 + careQuotes.length) % careQuotes.length)}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 transition-colors hover:bg-teal-50 hover:text-teal-900 focus:outline-none focus:ring-2 focus:ring-teal-700"
+                  aria-label="Show previous health quote"
+                >
+                  <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveQuote((activeQuote + 1) % careQuotes.length)}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 transition-colors hover:bg-teal-50 hover:text-teal-900 focus:outline-none focus:ring-2 focus:ring-teal-700"
+                  aria-label="Show next health quote"
+                >
+                  <ArrowRight aria-hidden="true" className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            <div className="mt-3 flex justify-center gap-1.5" aria-label="Quote selection">
+              {careQuotes.map((item, index) => (
+                <button
+                  key={item.author}
+                  type="button"
+                  onClick={() => setActiveQuote(index)}
+                  aria-label={`Show quote ${index + 1}`}
+                  aria-current={activeQuote === index ? 'true' : undefined}
+                  className={`h-1.5 rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-teal-700 focus:ring-offset-2 ${
+                    activeQuote === index ? 'w-6 bg-teal-700' : 'w-1.5 bg-teal-200 hover:bg-teal-400'
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
         </section>
 
         {/* Right Side: Auth Form Card */}
@@ -392,7 +481,8 @@ export default function AuthScreen({
             <button
               type="button"
               onClick={handleQuickDemo}
-              className="w-full min-h-11 rounded-xl border border-teal-200 bg-teal-50/70 hover:bg-teal-100/70 text-teal-950 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
+              disabled={isSubmitting}
+              className="w-full min-h-11 rounded-xl border border-teal-200 bg-teal-50/70 hover:bg-teal-100/70 text-teal-950 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-2xs disabled:opacity-60"
             >
               <Zap className="w-3.5 h-3.5 text-amber-500" />
               <span>Explore Demo as Caregiver (demo@medcheck.org)</span>

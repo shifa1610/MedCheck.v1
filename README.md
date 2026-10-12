@@ -175,3 +175,20 @@ npm run dev
 
 - **Frontend Application:** http://localhost:5173
 - **Backend API:** http://localhost:5000/api/health
+
+### 2. Configure MongoDB persistence
+
+Copy `.env.example` to `.env`, set `MONGODB_URI` to a local MongoDB URL or your
+MongoDB Atlas connection string, and replace `JWT_SECRET` with a private random
+secret (for example, generate one with
+`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`).
+Do not commit `.env`. The backend defaults to
+`mongodb://127.0.0.1:27017/medcheck` when `MONGODB_URI` is omitted.
+
+The API exposes `POST /api/auth/register`, `POST /api/auth/login`,
+`GET /api/auth/me`, and authenticated `GET`, `POST`, and `DELETE /api/records`
+routes. Passwords are hashed before storage; record routes are scoped to the
+JWT user. Verified extracted records are saved permanently when the database is
+connected. `/api/health` reports the database connection state. When the API or
+database is unavailable, the UI keeps sample records available and marks demo
+or session-only changes as not permanently saved.

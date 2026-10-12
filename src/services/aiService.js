@@ -146,6 +146,7 @@ export async function extractMedicalRecord(input, apiKey = null) {
 
   return {
     id: `REC-${Date.now()}`,
+    rawText,
     title: recordType === "prescription" 
       ? "Doctor Prescription & Treatment Plan" 
       : recordType === "discharge" 

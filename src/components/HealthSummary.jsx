@@ -17,6 +17,30 @@ import VoicePlayer from './VoicePlayer';
 export default function HealthSummary({ records, patient, language }) {
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
 
+  if (records.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-xs leading-relaxed text-amber-900">
+          <ShieldAlert aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+          <p><span className="font-semibold text-amber-950">Safety Notice & Medical Guardrail: </span>{t.summary.disclaimer}</p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-teal-200 bg-teal-50 text-teal-700">
+              <Activity aria-hidden="true" className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-900">Your health summary will appear here</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                No records are saved for {patient.name} yet. Upload a report or prescription to get started.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Get the most recent lab or diagnostic record
   const latestLab = records.find(r => r.type === 'lab') || records[0];
   const latestRx = records.find(r => r.type === 'prescription');

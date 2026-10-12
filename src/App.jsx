@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import AuthScreen from './components/AuthScreen';
@@ -17,7 +17,15 @@ import AccuracyDashboard from './components/AccuracyDashboard';
 import VisitPrepBrief from './components/VisitPrepBrief';
 import LanguageConverter from './components/LanguageConverter';
 import MedicineConflictDetector from './components/MedicineConflictDetector';
-import { getCurrentUser, logoutUser } from './utils/auth';
+import {
+  ApiUnavailableError,
+  getAuthToken,
+  getCurrentUser,
+  getCurrentUserSession,
+  getMedicalRecords,
+  logoutUser,
+  saveMedicalRecord
+} from './utils/auth';
 
 import { 
   FAMILY_MEMBERS, 
@@ -144,11 +152,79 @@ const FEATURE_MODULES = [
   }
 ];
 
+function mapSavedRecord(record) {
+  const recordType = record.recordType === 'lab_report'
+    ? 'lab'
+    : record.recordType === 'discharge_summary'
+      ? 'discharge'
+      : 'prescription';
+  const recordDate = record.recordDate ? new Date(record.recordDate) : new Date(record.createdAt);
+
+  return {
+    ...record,
+    id: record._id || record.id,
+    title: record.title || record.category || 'Medical record',
+    type: recordType,
+    date: Number.isNaN(recordDate.getTime()) ? '' : recordDate.toISOString().slice(0, 10),
+    facility: record.clinicHospital || '',
+    doctor: record.doctorName || '',
+    category: record.category || record.recordType,
+    summary: record.summary || { plainText: record.plainSummary || '' },
+    biomarkers: record.biomarkers || record.testValues || [],
+    testValues: record.testValues || record.biomarkers || [],
+    medications: record.medications || [],
+    abnormalExplanations: record.abnormalFindings || [],
+    abnormalFindings: record.abnormalFindings || []
+  };
+}
+
+function toRecordPayload(record, patientName) {
+  const recordType = record.type === 'lab' || record.type === 'lab_report' || record.recordType === 'lab_report' ||
+    /lab|laboratory/i.test(`${record.category || ''} ${record.title || ''}`)
+    ? 'lab_report'
+    : record.type === 'discharge' || record.type === 'discharge_summary' || record.recordType === 'discharge_summary' ||
+      /discharge/i.test(`${record.category || ''} ${record.title || ''}`)
+      ? 'discharge_summary'
+      : 'prescription';
+
+  return {
+    patientName,
+    recordType,
+    recordDate: record.date || record.recordDate || new Date().toISOString(),
+    doctorName: record.doctor || record.doctorName || '',
+    clinicHospital: record.facility || record.clinicHospital || '',
+    rawText: record.rawText || record.text || record.originalText || record.extractedText || '',
+    plainSummary: record.plainSummary || record.summary?.plainText || '',
+    medications: (record.medicines || record.medications || []).map(medication => ({
+      name: medication.name || medication.rawName || 'Unknown medication',
+      dosage: medication.dosage || '',
+      frequency: medication.frequency || '',
+      instructions: medication.instructions || ''
+    })),
+    abnormalFindings: record.abnormalFindings || record.abnormalExplanations || [],
+    title: record.title || '',
+    category: record.category || '',
+    summary: record.summary || null,
+    biomarkers: record.biomarkers || [],
+    testValues: record.testValues || [],
+    verificationStatus: record.verificationStatus || '',
+    verificationProvenance: record.verificationProvenance || null
+  };
+}
+
 export default function App() {
   const [currentTab, setCurrentTab] = useState('dashboard');
+  const [isAuthPage, setIsAuthPage] = useState(() => (
+    window.location.pathname === '/login' || window.location.pathname === '/signup'
+  ));
+  const [authPageMode, setAuthPageMode] = useState(() => (
+    window.location.pathname === '/signup' ? 'register' : 'login'
+  ));
   const [currentFamilyKey, setCurrentFamilyKey] = useState('papa');
   const [patient, setPatient] = useState(FAMILY_MEMBERS.papa);
   const [records, setRecords] = useState(PAPA_RECORDS);
+  const [remoteRecords, setRemoteRecords] = useState([]);
+  const [backendStatus, setBackendStatus] = useState('demo');
   const [language, setLanguage] = useState(FAMILY_MEMBERS.papa.preferredLanguage || 'en');
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [pendingVerificationRecord, setPendingVerificationRecord] = useState(null);
@@ -156,19 +232,49 @@ export default function App() {
 
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
 
+  useEffect(() => {
+    const syncAuthRoute = () => {
+      const pathname = window.location.pathname;
+      const isAuthPath = pathname === '/login' || pathname === '/signup';
+      setIsAuthPage(isAuthPath);
+      setAuthPageMode(pathname === '/signup' ? 'register' : 'login');
+      if (!isAuthPath) setCurrentTab('dashboard');
+    };
+
+    window.addEventListener('popstate', syncAuthRoute);
+    return () => window.removeEventListener('popstate', syncAuthRoute);
+  }, []);
+
+  const openAuthPage = (mode = 'login') => {
+    const nextMode = mode === 'signup' || mode === 'register' ? 'register' : 'login';
+    const nextPath = nextMode === 'register' ? '/signup' : '/login';
+    window.history.pushState({}, '', nextPath);
+    setAuthPageMode(nextMode);
+    setIsAuthPage(true);
+  };
+
+  const openDashboard = () => {
+    if (window.location.pathname !== '/') {
+      window.history.pushState({}, '', '/');
+    }
+    setIsAuthPage(false);
+    setCurrentTab('dashboard');
+  };
+
   // Handle switching family profiles (Papa -> Maa -> Self)
   const handleFamilyMemberChange = (key) => {
     setCurrentFamilyKey(key);
     const selected = FAMILY_MEMBERS[key] || FAMILY_MEMBERS.papa;
     setPatient(selected);
+    const savedForPatient = remoteRecords.filter(record => record.patientName === selected.name);
     if (key === 'papa') {
-      setRecords(PAPA_RECORDS);
+      setRecords(savedForPatient.length || backendStatus === 'connected' ? savedForPatient : PAPA_RECORDS);
       setLanguage(selected.preferredLanguage || 'te');
     } else if (key === 'maa') {
-      setRecords(MAA_RECORDS);
+      setRecords(savedForPatient.length || backendStatus === 'connected' ? savedForPatient : MAA_RECORDS);
       setLanguage(selected.preferredLanguage || 'hi');
     } else {
-      setRecords(SELF_RECORDS);
+      setRecords(savedForPatient.length || backendStatus === 'connected' ? savedForPatient : SELF_RECORDS);
       setLanguage(selected.preferredLanguage || 'en');
     }
     setToastMessage(`Switched profile to ${selected.name} (${selected.relation})`);
@@ -184,27 +290,95 @@ export default function App() {
   };
 
   // Called when user clicks "Confirm & Save" on the Verify Screen
-  const handleVerifyConfirmed = (verifiedRecord) => {
-    setRecords(prev => [verifiedRecord, ...prev]);
-    setPendingVerificationRecord(null);
-    setCurrentTab('timeline');
-    setToastMessage(`✓ Record confirmed and saved to health timeline!`);
-    setTimeout(() => setToastMessage(''), 5000);
+  const handleVerifyConfirmed = async (verifiedRecord) => {
+    const token = getAuthToken();
+    if (!token) {
+      setRecords(prev => [verifiedRecord, ...prev]);
+      setPendingVerificationRecord(null);
+      setCurrentTab('timeline');
+      setToastMessage('Demo record added for this session only; sign in with the database enabled to save permanently.');
+      setTimeout(() => setToastMessage(''), 6000);
+      return;
+    }
+
+    try {
+      const savedRecord = mapSavedRecord(await saveMedicalRecord(toRecordPayload(verifiedRecord, patient.name)));
+      setRemoteRecords(prev => [savedRecord, ...prev]);
+      setRecords(prev => [savedRecord, ...prev]);
+      setBackendStatus('connected');
+      setPendingVerificationRecord(null);
+      setCurrentTab('timeline');
+      setToastMessage('✓ Record saved to your account.');
+      setTimeout(() => setToastMessage(''), 5000);
+    } catch (error) {
+      if (error instanceof ApiUnavailableError) {
+        setRecords(prev => [verifiedRecord, ...prev]);
+        setBackendStatus('offline');
+        setPendingVerificationRecord(null);
+        setCurrentTab('timeline');
+        setToastMessage('Database unavailable. Record is visible for this session but was not saved permanently.');
+        setTimeout(() => setToastMessage(''), 6000);
+      } else {
+        setToastMessage(`Could not save the record: ${error.message}`);
+        setTimeout(() => setToastMessage(''), 6000);
+      }
+    }
   };
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState(() => getCurrentUser());
 
+  useEffect(() => {
+    if (!currentUser || !getAuthToken()) {
+      setBackendStatus('demo');
+      return undefined;
+    }
+
+    let isActive = true;
+    setBackendStatus('loading');
+    (async () => {
+      try {
+        const user = await getCurrentUserSession();
+        if (!isActive) return;
+        setCurrentUser(user);
+        const savedRecords = (await getMedicalRecords()).map(mapSavedRecord);
+        if (!isActive) return;
+        setRemoteRecords(savedRecords);
+        setRecords(savedRecords.filter(record => record.patientName === patient.name));
+        setBackendStatus('connected');
+      } catch (error) {
+        if (!isActive) return;
+        if (error.status === 401) {
+          logoutUser();
+          setCurrentUser(null);
+          openAuthPage('login');
+        } else {
+          setBackendStatus('offline');
+          if (!(error instanceof ApiUnavailableError)) {
+            console.error('Failed loading saved medical records:', error);
+          }
+        }
+      }
+    })();
+
+    return () => {
+      isActive = false;
+    };
+  }, [currentUser?.email]);
+
   const handleLogout = () => {
     logoutUser();
     setCurrentUser(null);
+    setRemoteRecords([]);
+    setBackendStatus('demo');
+    openAuthPage('login');
     setToastMessage('You have logged out.');
     setTimeout(() => setToastMessage(''), 4000);
   };
 
   const handleAuthSuccess = (user) => {
     setCurrentUser(user);
-    setCurrentTab('dashboard');
+    openDashboard();
     setToastMessage(`Welcome back, ${user.name}!`);
     setTimeout(() => setToastMessage(''), 4000);
   };
@@ -212,14 +386,14 @@ export default function App() {
   const currentModule = FEATURE_MODULES.find(m => m.id === currentTab);
 
   // If user is not authenticated or explicitly navigating to login/signup, render AuthScreen
-  if (!currentUser || currentTab === 'login' || currentTab === 'signup') {
+  if (isAuthPage || !currentUser || currentTab === 'login' || currentTab === 'signup') {
     return (
       <AuthScreen
         currentLang={language}
         setCurrentLang={setLanguage}
         onAuthenticated={handleAuthSuccess}
-        onCancel={currentUser ? () => setCurrentTab('dashboard') : undefined}
-        initialMode={currentTab === 'signup' ? 'register' : 'login'}
+        onCancel={currentUser ? openDashboard : undefined}
+        initialMode={isAuthPage ? authPageMode : currentTab === 'signup' ? 'register' : 'login'}
       />
     );
   }
@@ -239,6 +413,17 @@ export default function App() {
         </div>
       )}
 
+      {backendStatus === 'offline' || backendStatus === 'demo' ? (
+        <div
+          role="status"
+          className="relative z-10 border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-xs font-semibold text-amber-950"
+        >
+          {backendStatus === 'offline'
+            ? 'Database unavailable — showing sample records. Changes will not be saved permanently.'
+            : 'Demo mode — records are sample data and changes are only kept for this session.'}
+        </div>
+      ) : null}
+
       {/* Navigation Drawer (Sidebar with 11 Feature Cards) */}
       <Sidebar
         isOpen={isSidebarOpen}
@@ -248,7 +433,7 @@ export default function App() {
         pendingVerificationCount={pendingVerificationRecord ? 1 : 0}
         currentUser={currentUser}
         onLogout={handleLogout}
-        onOpenAuth={(mode) => setCurrentTab(mode || 'login')}
+        onOpenAuth={openAuthPage}
       />
 
       {/* Navigation Header */}
@@ -264,7 +449,7 @@ export default function App() {
         onOpenUpload={() => setIsUploadOpen(true)}
         currentUser={currentUser}
         onLogout={handleLogout}
-        onOpenAuth={(mode) => setCurrentTab(mode || 'login')}
+        onOpenAuth={openAuthPage}
       />
 
       {/* Main Content Area */}
