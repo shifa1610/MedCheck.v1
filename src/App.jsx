@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
+import AuthScreen from './components/AuthScreen';
 import AuthView from './components/AuthView';
 import HealthSummary from './components/HealthSummary';
 import HealthTimeline from './components/HealthTimeline';
@@ -210,12 +211,29 @@ export default function App() {
 
   const currentModule = FEATURE_MODULES.find(m => m.id === currentTab);
 
+  // If user is not authenticated or explicitly navigating to login/signup, render AuthScreen
+  if (!currentUser || currentTab === 'login' || currentTab === 'signup') {
+    return (
+      <AuthScreen
+        currentLang={language}
+        setCurrentLang={setLanguage}
+        onAuthenticated={handleAuthSuccess}
+        onCancel={currentUser ? () => setCurrentTab('dashboard') : undefined}
+        initialMode={currentTab === 'signup' ? 'register' : 'login'}
+      />
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-['Plus_Jakarta_Sans',sans-serif]">
+    <div className="relative flex min-h-screen flex-col overflow-x-hidden bg-[var(--color-canvas)] text-[var(--color-ink)] antialiased font-['Plus_Jakarta_Sans',sans-serif]">
+      {/* Subtle Mesh Gradient Glow Blobs matching reference repo */}
+      <div className="fixed top-0 left-1/4 w-[600px] h-[350px] bg-sky-200/25 rounded-full blur-[120px] pointer-events-none -z-10" />
+      <div className="fixed bottom-0 right-1/4 w-[500px] h-[300px] bg-teal-200/20 rounded-full blur-[140px] pointer-events-none -z-10" />
+
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-lg border border-slate-800 flex items-center gap-2.5 text-xs animate-in slide-in-from-bottom-5">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <CheckCircle2 className="w-4 h-4 text-teal-400 shrink-0" />
           <span>{toastMessage}</span>
           <button onClick={() => setToastMessage('')} className="ml-2 text-slate-400 hover:text-white font-bold cursor-pointer">✕</button>
         </div>
@@ -252,24 +270,24 @@ export default function App() {
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         
-        {/* Breadcrumb Bar when viewing any non-dashboard tab (except login/signup) */}
-        {currentTab !== 'dashboard' && currentTab !== 'login' && currentTab !== 'signup' && (
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-3 bg-white border border-emerald-100 rounded-xl px-4 py-2.5 shadow-2xs">
+        {/* Breadcrumb Bar when viewing any non-dashboard tab */}
+        {currentTab !== 'dashboard' && (
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3 bg-white/95 backdrop-blur border border-teal-100 rounded-xl px-4 py-2.5 shadow-2xs">
             <div className="flex items-center gap-2 text-xs">
               <button 
                 onClick={() => setCurrentTab('dashboard')} 
-                className="text-emerald-700 hover:text-emerald-900 font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                className="text-teal-800 hover:text-teal-950 font-bold flex items-center gap-1 cursor-pointer transition-colors"
                 title="Return to main dashboard"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Dashboard</span>
               </button>
               <span className="text-slate-300">/</span>
-              <span className="text-slate-800 font-bold">
+              <span className="text-slate-900 font-bold">
                 {currentModule?.title || currentTab}
               </span>
               {currentModule?.badge && (
-                <span className="text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded font-semibold ml-1">
+                <span className="text-[10px] bg-teal-50 text-teal-900 border border-teal-200 px-2 py-0.5 rounded font-bold ml-1">
                   {currentModule.badge}
                 </span>
               )}
@@ -284,37 +302,28 @@ export default function App() {
           </div>
         )}
 
-        {/* Authentication View (Login or Sign Up) */}
-        {(currentTab === 'login' || currentTab === 'signup') && (
-          <AuthView
-            initialMode={currentTab === 'signup' ? 'signup' : 'login'}
-            onAuthSuccess={handleAuthSuccess}
-            onCancel={() => setCurrentTab('dashboard')}
-          />
-        )}
-
         {/* 1. Health Dashboard Tab */}
         {currentTab === 'dashboard' && (
           <div className="space-y-6">
             
             {/* Student Project Context Banner */}
-            <div className="bg-emerald-800 text-white rounded-2xl p-5 border border-emerald-700 shadow-xs">
+            <div className="bg-gradient-to-r from-teal-950 via-teal-900 to-teal-800 text-white rounded-2xl p-5 border border-teal-800/80 shadow-md">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-start gap-3.5">
-                  <div className="w-11 h-11 rounded-xl bg-emerald-700/80 border border-emerald-600 text-xl flex items-center justify-center shrink-0">
+                  <div className="w-11 h-11 rounded-xl bg-teal-800/80 border border-teal-700 text-xl flex items-center justify-center shrink-0 shadow-xs">
                     {patient.avatarIcon || "👨‍🦳"}
                   </div>
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="bg-emerald-900 text-emerald-200 text-[10px] font-bold uppercase px-2 py-0.5 rounded border border-emerald-700">
+                      <span className="bg-teal-950 text-teal-200 text-[10px] font-bold uppercase px-2 py-0.5 rounded border border-teal-800">
                         Caregiver Healthcare Project
                       </span>
-                      <span className="text-xs text-emerald-100 font-medium">
+                      <span className="text-xs text-teal-100 font-medium">
                         Patient Profile: <strong>{patient.name}</strong> ({patient.relation}, {patient.age}y)
                       </span>
                     </div>
-                    <p className="text-xs text-emerald-100/90 mt-1 max-w-2xl leading-relaxed">
-                      MEDCHECK organizes medical records, explains clinical terms in regional languages, flags conflicting doses, and assists in doctor visit preparation.
+                    <p className="text-xs text-teal-100/90 mt-1 max-w-2xl leading-relaxed">
+                      MedCheck organizes medical records, explains clinical terms in regional languages, flags conflicting doses, and assists in doctor visit preparation.
                     </p>
                   </div>
                 </div>
@@ -322,17 +331,17 @@ export default function App() {
                 <div className="flex flex-wrap items-center gap-2 shrink-0">
                   <button
                     onClick={() => setCurrentTab('compare')}
-                    className="inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-semibold px-3 py-2 rounded-lg transition-colors cursor-pointer border border-emerald-600"
+                    className="inline-flex items-center gap-1.5 bg-teal-800 hover:bg-teal-700 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition-colors cursor-pointer border border-teal-700 shadow-sm"
                   >
-                    <GitCompare className="w-3.5 h-3.5 text-emerald-300" />
+                    <GitCompare className="w-3.5 h-3.5 text-teal-300" />
                     <span>Check Conflicts</span>
                   </button>
 
                   <button
                     onClick={() => setCurrentTab('visitprep')}
-                    className="inline-flex items-center gap-1.5 bg-white text-emerald-900 hover:bg-emerald-50 text-xs font-bold px-3 py-2 rounded-lg transition-colors cursor-pointer shadow-xs"
+                    className="inline-flex items-center gap-1.5 bg-white text-teal-950 hover:bg-teal-50 text-xs font-bold px-3.5 py-2 rounded-xl transition-colors cursor-pointer shadow-sm"
                   >
-                    <Printer className="w-3.5 h-3.5 text-emerald-700" />
+                    <Printer className="w-3.5 h-3.5 text-teal-700" />
                     <span>Visit Brief</span>
                   </button>
                 </div>
@@ -344,9 +353,9 @@ export default function App() {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-1">
                 <div>
                   <h2 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-emerald-600" />
-                    <span>MEDCHECK Features & Modules</span>
-                    <span className="text-xs font-semibold bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded-full border border-emerald-200">
+                    <Sparkles className="w-4 h-4 text-teal-700" />
+                    <span>MedCheck Features & Modules</span>
+                    <span className="text-xs font-bold bg-teal-50 text-teal-900 px-2 py-0.5 rounded-full border border-teal-200">
                       11 Modules
                     </span>
                   </h2>
@@ -363,18 +372,18 @@ export default function App() {
                     <div
                       key={card.id}
                       onClick={() => setCurrentTab(card.id)}
-                      className="group bg-white rounded-xl border border-slate-200 hover:border-emerald-400 p-4 shadow-2xs hover:shadow-md transition-all cursor-pointer flex flex-col justify-between"
+                      className="glass-card group rounded-2xl border border-[#cbdada] hover:border-teal-500 p-4 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col justify-between"
                     >
                       <div>
                         <div className="flex items-center justify-between mb-2.5">
-                          <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                          <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-800 border border-teal-100 flex items-center justify-center group-hover:bg-teal-800 group-hover:text-white transition-colors">
                             <Icon className="w-4 h-4" />
                           </div>
                           <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
                             #{idx + 1}
                           </span>
                         </div>
-                        <h3 className="text-xs sm:text-sm font-bold text-slate-900 group-hover:text-emerald-800 transition-colors">
+                        <h3 className="text-xs sm:text-sm font-bold text-slate-900 group-hover:text-teal-900 transition-colors">
                           {card.title}
                         </h3>
                         <p className="text-xs text-slate-600 mt-1 line-clamp-2 leading-relaxed">
@@ -383,10 +392,10 @@ export default function App() {
                       </div>
 
                       <div className="mt-3.5 pt-2.5 border-t border-slate-100 flex items-center justify-between">
-                        <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded">
+                        <span className="text-[10px] font-semibold text-teal-800 bg-teal-50 border border-teal-100 px-2 py-0.5 rounded">
                           {card.tag}
                         </span>
-                        <span className="text-xs font-semibold text-emerald-700 group-hover:text-emerald-900 flex items-center gap-1 group-hover:translate-x-0.5 transition-all">
+                        <span className="text-xs font-bold text-teal-800 group-hover:text-teal-950 flex items-center gap-1 group-hover:translate-x-0.5 transition-all">
                           <span>Open</span>
                           <ArrowRight className="w-3 h-3" />
                         </span>
@@ -398,18 +407,18 @@ export default function App() {
             </section>
 
             {/* Top Patient Profile Card */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs">
+            <div className="glass-card rounded-2xl border border-[#cbdada] p-5 sm:p-6 shadow-sm">
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
                 {/* Left: Patient Info */}
                 <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-emerald-600 text-white font-bold text-lg flex items-center justify-center shadow-xs">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-teal-700 to-cyan-600 text-white font-extrabold text-lg flex items-center justify-center shadow-md ring-4 ring-teal-100">
                     {patient.name.split(' ').map(n => n[0]).join('')}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <h1 className="text-lg sm:text-xl font-bold text-slate-900">{patient.name}</h1>
-                      <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3" />
+                      <span className="bg-teal-50 text-teal-800 border border-teal-200 text-xs font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 text-teal-600" />
                         <span>Verified Profile</span>
                       </span>
                     </div>
@@ -443,14 +452,14 @@ export default function App() {
                   </div>
                   <div className="w-px h-7 bg-slate-200" />
                   <div>
-                    <div className="font-bold text-emerald-700 text-base">
+                    <div className="font-bold text-teal-800 text-base">
                       {records.reduce((acc, r) => acc + (r.medications?.length || 0), 0)}
                     </div>
                     <div className="text-[10px] text-slate-500">Total Medications</div>
                   </div>
                   <div className="w-px h-7 bg-slate-200" />
                   <div>
-                    <div className="font-bold text-teal-700 text-base">8</div>
+                    <div className="font-bold text-cyan-800 text-base">8</div>
                     <div className="text-[10px] text-slate-500">Languages Ready</div>
                   </div>
                 </div>

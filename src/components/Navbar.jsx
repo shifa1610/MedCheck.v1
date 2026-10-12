@@ -5,10 +5,12 @@ import {
   Languages, 
   CheckCircle2, 
   Users, 
-  HeartPulse,
+  Activity,
   User,
   LogOut,
-  LogIn
+  LogIn,
+  Sparkles,
+  ShieldCheck
 } from 'lucide-react';
 import { TRANSLATIONS } from '../data/translations';
 
@@ -28,57 +30,64 @@ export default function Navbar({
 }) {
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
 
-  return (
-    <header className="sticky top-0 z-40 bg-white border-b border-emerald-100 shadow-xs">
-      {/* Top Banner: Project Context & Family Switcher */}
-      <div className="bg-emerald-900 text-emerald-50 px-4 py-1.5 text-xs flex flex-wrap justify-between items-center gap-2">
-        <div className="flex items-center gap-2">
-          <span className="bg-emerald-800 text-emerald-200 border border-emerald-700 px-2 py-0.5 rounded text-[10px] uppercase font-semibold">
-            Healthcare Project
-          </span>
-          <span className="hidden sm:inline text-emerald-200 text-xs">
-            MEDCHECK — Personal Health Record & Multilingual Voice-Over
-          </span>
-        </div>
+  const initials = currentUser?.name
+    ? currentUser.name.split(/\s+/).filter(Boolean).slice(0, 2).map(n => n[0].toUpperCase()).join('')
+    : 'MC';
 
-        {/* Family Member Caregiver Selector */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 bg-emerald-950/70 px-2.5 py-0.5 rounded-lg border border-emerald-800">
-            <Users className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="text-[11px] text-emerald-200 font-medium">Record Profile:</span>
-            <select
-              value={currentFamilyKey}
-              onChange={(e) => onFamilyMemberChange(e.target.value)}
-              className="bg-transparent text-[11px] font-bold text-white focus:outline-hidden cursor-pointer"
-              aria-label="Select family profile"
-            >
-              <option value="papa" className="bg-slate-900 text-white">Papa (Ramesh, 62y)</option>
-              <option value="maa" className="bg-slate-900 text-white">Maa (Sunita, 58y)</option>
-              <option value="self" className="bg-slate-900 text-white">Self (Rahul, 32y)</option>
-            </select>
+  return (
+    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-200 shadow-xs">
+      {/* Top Thin Caregiver Ribbon (Matching minal_medcheck style) */}
+      <div className="border-b border-slate-800 bg-slate-900 text-slate-200 px-4 py-1.5 text-xs">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#0EA5E9]/15 text-[#0EA5E9] font-semibold text-[11px] border border-[#0EA5E9]/30">
+              <Sparkles className="w-3 h-3 text-[#0EA5E9]" />
+              MedCheck AI
+            </span>
+            <span className="hidden md:inline text-slate-400 text-xs">
+              Family health, made clearer • Zero-Diagnosis Safe Protocol
+            </span>
           </div>
 
-          <div className="hidden lg:flex items-center gap-1.5 text-emerald-300 bg-emerald-950/70 px-2.5 py-0.5 rounded-lg border border-emerald-800">
-            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-            <span className="text-[11px] font-mono">ABHA: {patient.abhaId}</span>
+          {/* Family Member Caregiver Selector */}
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-0.5 rounded-lg border border-slate-700">
+              <Users className="w-3.5 h-3.5 text-teal-400" />
+              <span className="text-[11px] text-slate-300 font-medium">Record Profile:</span>
+              <select
+                value={currentFamilyKey}
+                onChange={(e) => onFamilyMemberChange(e.target.value)}
+                className="bg-transparent text-[11px] font-bold text-white focus:outline-hidden cursor-pointer"
+                aria-label="Select family profile"
+              >
+                <option value="papa" className="bg-slate-900 text-white">Papa (Ramesh, 62y)</option>
+                <option value="maa" className="bg-slate-900 text-white">Maa (Sunita, 58y)</option>
+                <option value="self" className="bg-slate-900 text-white">Self (Rahul, 32y)</option>
+              </select>
+            </div>
+
+            <div className="hidden lg:flex items-center gap-1.5 text-emerald-300 bg-slate-800 px-2.5 py-0.5 rounded-lg border border-slate-700">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-[11px] font-mono">ABHA: {patient.abhaId}</span>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Main Nav Bar: Clean & Minimal */}
+      {/* Main Nav Bar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-14">
+        <div className="flex items-center justify-between h-16">
           
-          {/* Left: 3-line Hamburger Menu Icon + MEDCHECK Logo */}
+          {/* Left: Hamburger Menu (☰) + MedCheck Brand */}
           <div className="flex items-center gap-3">
             {/* Hamburger Button (☰) */}
             <button
               onClick={onOpenSidebar}
-              className="p-2 rounded-lg text-slate-700 hover:text-emerald-900 hover:bg-emerald-50 border border-slate-200 transition-colors cursor-pointer flex items-center justify-center"
+              className="p-2 rounded-xl text-slate-700 hover:text-teal-950 hover:bg-teal-50 border border-slate-200 transition-colors cursor-pointer flex items-center justify-center"
               aria-label="Open navigation menu"
               title="Open feature menu"
             >
-              <Menu className="w-5 h-5 text-emerald-800" />
+              <Menu className="w-5 h-5 text-teal-800" />
             </button>
 
             {/* Logo */}
@@ -87,30 +96,48 @@ export default function Navbar({
               onClick={() => setCurrentTab('dashboard')}
               title="Go to Health Dashboard"
             >
-              <div className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center text-white shadow-xs">
-                <HeartPulse className="w-5 h-5 stroke-[2.2]" />
+              <div className="w-10 h-10 rounded-xl bg-teal-800 flex items-center justify-center text-white shadow-md shadow-teal-900/10">
+                <Activity className="w-5 h-5" />
               </div>
               <div>
-                <span className="text-lg font-bold text-emerald-950 tracking-tight">
-                  MEDCHECK
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-lg font-black text-slate-950 tracking-tight">
+                    MedCheck
+                  </span>
+                  <span className="text-lg font-black text-teal-800">
+                    AI
+                  </span>
+                  <span className="hidden sm:inline-flex text-[10px] font-bold text-teal-900 bg-teal-50 border border-teal-200 px-1.5 py-0.2 rounded-full font-mono">
+                    v2.4
+                  </span>
+                </div>
                 <p className="text-[10px] text-slate-500 hidden md:block -mt-0.5">
-                  Medical Language & Health Copilot
+                  Family health, made clearer
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Right Action Tools: Language, Upload Record, and Login/Profile */}
+          {/* Right Controls: ABHA Badge, Language, Upload Record, and User Auth */}
           <div className="flex items-center gap-2 sm:gap-3">
             
+            {/* ABHA Badge (minal_medcheck style) */}
+            <div className="hidden xl:flex items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-950">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+              </span>
+              <span className="text-emerald-700 font-normal">ABHA:</span>
+              <span className="font-mono font-bold text-emerald-900">{patient.abhaId}</span>
+            </div>
+
             {/* Language Selector */}
-            <div className="flex items-center bg-slate-100 border border-slate-200 rounded-lg px-2 py-1">
-              <Languages className="w-3.5 h-3.5 text-emerald-700 mr-1.5 shrink-0" />
+            <div className="flex items-center bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 shadow-2xs hover:border-teal-600 transition-colors">
+              <Languages className="w-3.5 h-3.5 text-teal-800 mr-1.5 shrink-0" />
               <select
                 value={language}
                 onChange={(e) => setLanguage(e.target.value)}
-                className="bg-transparent text-xs font-medium text-slate-800 focus:outline-hidden cursor-pointer"
+                className="bg-transparent text-xs font-bold text-slate-900 focus:outline-hidden cursor-pointer"
                 aria-label="Select language"
               >
                 <option value="en">English (EN)</option>
@@ -127,7 +154,7 @@ export default function Navbar({
             {/* Upload Record Button */}
             <button
               onClick={onOpenUpload}
-              className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors cursor-pointer shadow-xs active:scale-95"
+              className="inline-flex items-center gap-1.5 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition-all cursor-pointer shadow-md shadow-teal-900/10 active:scale-95"
             >
               <Upload className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Upload Record</span>
@@ -136,17 +163,19 @@ export default function Navbar({
 
             {/* Login / Profile Controls */}
             {currentUser ? (
-              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg p-1 sm:px-2 sm:py-1">
-                <div className="w-6 h-6 rounded-full bg-emerald-700 text-white text-[11px] font-bold flex items-center justify-center shrink-0">
-                  {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
+              <div className="flex items-center gap-2 bg-gradient-to-br from-teal-50 to-white border border-teal-100 rounded-xl p-1 sm:px-2.5 sm:py-1 shadow-2xs">
+                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-teal-700 to-cyan-600 text-white text-xs font-black flex items-center justify-center shrink-0 shadow-xs ring-1 ring-white">
+                  {initials}
                 </div>
-                <span className="text-xs font-semibold text-slate-800 hidden sm:inline max-w-[90px] truncate">
-                  {currentUser.name.split(' ')[0]}
-                </span>
+                <div className="hidden sm:block text-left max-w-[100px]">
+                  <div className="text-xs font-bold text-slate-900 truncate">
+                    {currentUser.name}
+                  </div>
+                </div>
                 <button
                   onClick={onLogout}
                   title="Logout"
-                  className="text-slate-400 hover:text-rose-600 p-1 rounded cursor-pointer transition-colors ml-0.5"
+                  className="text-slate-400 hover:text-rose-600 p-1 rounded-lg cursor-pointer transition-colors"
                   aria-label="Logout"
                 >
                   <LogOut className="w-3.5 h-3.5" />
@@ -155,10 +184,10 @@ export default function Navbar({
             ) : (
               <button
                 onClick={() => onOpenAuth('login')}
-                className="inline-flex items-center gap-1.5 border border-emerald-600 text-emerald-800 hover:bg-emerald-50 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 border border-teal-800 text-teal-800 hover:bg-teal-50 text-xs font-bold px-3 py-2 rounded-xl transition-colors cursor-pointer"
               >
                 <LogIn className="w-3.5 h-3.5" />
-                <span>Login</span>
+                <span>Sign in</span>
               </button>
             )}
 
