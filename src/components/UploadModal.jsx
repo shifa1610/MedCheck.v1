@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   Upload, 
   X, 
@@ -12,12 +12,77 @@ import {
   Activity,
   Layers,
   Camera,
-  Check
+  Check,
+  Info
 } from 'lucide-react';
 import { extractMedicalRecord } from '../services/aiService';
 import { scanMedicalDocument } from '../services/ocrService';
 import { TRANSLATIONS } from '../data/translations';
 import CameraCapture from './CameraCapture';
+
+/**
+ * Extracts plain text from a text-based PDF file in-browser without external binaries
+ */
+async function extractTextFromPdfFile(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const buffer = reader.result;
+        const bytes = new Uint8Array(buffer);
+        let binaryString = '';
+        const chunkSize = 8192;
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+          binaryString += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+        }
+
+        const textChunks = [];
+        // Extract PDF text blocks: BT ... ET
+        const textBlockRegex = /BT[\s\S]*?ET/g;
+        let blockMatch;
+        while ((blockMatch = textBlockRegex.exec(binaryString)) !== null) {
+          const block = blockMatch[0];
+          // Matches (String) Tj, ', "
+          const literalRegex = /\(([^)]+)\)\s*(?:Tj|'|")/g;
+          let litMatch;
+          while ((litMatch = literalRegex.exec(block)) !== null) {
+            textChunks.push(litMatch[1]);
+          }
+          // Matches [(Str1) -12 (Str2)] TJ
+          const arrayRegex = /\[(.*?)\]\s*TJ/g;
+          let arrMatch;
+          while ((arrMatch = arrayRegex.exec(block)) !== null) {
+            const inner = arrMatch[1];
+            const innerLiteralRegex = /\(([^)]+)\)/g;
+            let innerMatch;
+            while ((innerMatch = innerLiteralRegex.exec(inner)) !== null) {
+              textChunks.push(innerMatch[1]);
+            }
+          }
+        }
+
+        if (textChunks.length > 0) {
+          return resolve(textChunks.join(' '));
+        }
+
+        // Fallback: search for continuous ASCII sequences
+        const asciiMatches = binaryString.match(/[A-Za-z0-9,.:;\-\s]{4,}/g) || [];
+        const filtered = asciiMatches.filter(s => {
+          const trimmed = s.trim();
+          return trimmed.length > 3 && 
+            !/^(Font|Type|Subtype|Widths|Encoding|Length|Filter|FlateDecode|ProcSet|XObject|MediaBox|CropBox|Parent|Kids|Count|Catalog|Pages|Root)/i.test(trimmed);
+        });
+
+        resolve(filtered.join('\n'));
+      } catch (err) {
+        console.warn('PDF text extraction error:', err);
+        resolve('');
+      }
+    };
+    reader.onerror = () => resolve('');
+    reader.readAsArrayBuffer(file);
+  });
+}
 
 export default function UploadModal({ isOpen, onClose, onRecordAdded, language }) {
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
@@ -25,19 +90,24 @@ export default function UploadModal({ isOpen, onClose, onRecordAdded, language }
   const [dragOver, setDragOver] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [fileError, setFileError] = useState('');
+  const [fileNotice, setFileNotice] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState(0);
   const [customStatus, setCustomStatus] = useState('');
   const [textInput, setTextInput] = useState('');
   const [activeTab, setActiveTab] = useState('file'); // 'file', 'camera', 'samples', 'text'
 
+  // Request sequencing ref to prevent concurrent upload race conditions
+  const activeRequestIdRef = useRef(0);
+
   if (!isOpen) return null;
 
-  const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+  const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/jpg', 'text/plain'];
   const maxSizeBytes = 15 * 1024 * 1024; // 15 MB
 
   const validateFile = (file) => {
     setFileError('');
+    setFileNotice('');
     if (!file) return false;
 
     // Check extension / type
@@ -46,10 +116,11 @@ export default function UploadModal({ isOpen, onClose, onRecordAdded, language }
       file.name.endsWith('.png') || 
       file.name.endsWith('.jpg') || 
       file.name.endsWith('.jpeg') || 
-      file.name.endsWith('.webp');
+      file.name.endsWith('.webp') ||
+      file.name.endsWith('.txt');
 
     if (!isAllowed) {
-      setFileError('Invalid file type. Please upload a medical document in PDF, JPG, PNG, or WebP format.');
+      setFileError('Invalid file type. Please upload a medical document in PDF, JPG, PNG, WebP, or TXT format.');
       return false;
     }
 
@@ -67,6 +138,8 @@ export default function UploadModal({ isOpen, onClose, onRecordAdded, language }
     const file = files[0];
     if (validateFile(file)) {
       setSelectedFile(file);
+      setFileError('');
+      setFileNotice('');
     } else {
       setSelectedFile(null);
     }
@@ -75,50 +148,122 @@ export default function UploadModal({ isOpen, onClose, onRecordAdded, language }
   const handleProcessSelectedFile = async () => {
     if (!selectedFile) return;
 
+    // Increment request ID to track this specific scan execution
+    const currentRequestId = ++activeRequestIdRef.current;
+    const scanId = `SCAN-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+
     setIsProcessing(true);
     setProcessingStep(0);
     setCustomStatus('Reading document...');
+    setFileError('');
+    setFileNotice('');
+
+    // Try sending file receipt to backend if available
+    try {
+      const formData = new FormData();
+      formData.append('medicalRecord', selectedFile);
+      fetch('/api/upload', { method: 'POST', body: formData }).catch(() => {});
+    } catch (_) {}
 
     if (selectedFile.type.startsWith('image/')) {
       try {
-        setCustomStatus('Scanning image text via Tesseract OCR...');
+        setCustomStatus('Scanning image text via Tesseract OCR engine...');
         const ocrResult = await scanMedicalDocument(selectedFile, ({ percent, statusText }) => {
-          setCustomStatus(`${statusText} (${percent}%)`);
+          if (currentRequestId === activeRequestIdRef.current) {
+            setCustomStatus(`${statusText} (${percent}%)`);
+            setProcessingStep(Math.min(3, Math.floor(percent / 25)));
+          }
         });
 
+        // Ensure this response matches the current active scan request
+        if (currentRequestId !== activeRequestIdRef.current) return;
+
         setIsProcessing(false);
-        onRecordAdded(ocrResult.structuredRecord);
+        const record = {
+          ...ocrResult.structuredRecord,
+          scanId,
+          sourceFileName: selectedFile.name,
+          sourceFileSize: selectedFile.size
+        };
+        onRecordAdded(record);
         onClose();
       } catch (ocrErr) {
-        console.warn('[Direct OCR fallback]:', ocrErr);
-        handleProcess({ name: selectedFile.name, text: `Medical Record Image: ${selectedFile.name}` });
+        console.error('[OCR Error]:', ocrErr);
+        if (currentRequestId !== activeRequestIdRef.current) return;
+        setIsProcessing(false);
+        setFileError('Unable to extract legible text from this image. Please ensure the prescription is well-lit, in focus, or use the Camera / Paste Text tab.');
       }
+    } else if (selectedFile.type === 'text/plain' || selectedFile.name.endsWith('.txt')) {
+      // Plain text prescription note
+      setCustomStatus('Parsing medical text notes...');
+      const reader = new FileReader();
+      reader.onload = async () => {
+        if (currentRequestId !== activeRequestIdRef.current) return;
+        const text = reader.result || '';
+        const extracted = await extractMedicalRecord(text, { 
+          fileName: selectedFile.name, 
+          scanId,
+          skipDelay: true 
+        });
+        setIsProcessing(false);
+        onRecordAdded(extracted);
+        onClose();
+      };
+      reader.onerror = () => {
+        if (currentRequestId !== activeRequestIdRef.current) return;
+        setIsProcessing(false);
+        setFileError('Could not read text file.');
+      };
+      reader.readAsText(selectedFile);
     } else {
-      // PDF or binary file
-      setCustomStatus('Extracting clinical entities and medications from PDF...');
-      handleProcess({ name: selectedFile.name, text: `Medical Record PDF: ${selectedFile.name}` });
+      // PDF document
+      setCustomStatus('Analyzing PDF document structure and text layers...');
+      const pdfText = await extractTextFromPdfFile(selectedFile);
+      
+      if (currentRequestId !== activeRequestIdRef.current) return;
+
+      if (!pdfText || pdfText.trim().length < 15) {
+        // Scanned image PDF with no text layers
+        setCustomStatus('PDF lacks embedded text layers (scanned document). Processing with clinical review...');
+      }
+
+      const extractedRecord = await extractMedicalRecord(pdfText || "", {
+        fileName: selectedFile.name,
+        scanId
+      });
+
+      if (currentRequestId !== activeRequestIdRef.current) return;
+
+      setIsProcessing(false);
+      onRecordAdded(extractedRecord);
+      onClose();
     }
   };
 
   const handleProcess = async (sampleDataOrText) => {
+    const currentRequestId = ++activeRequestIdRef.current;
+    const scanId = `SCAN-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+
     setIsProcessing(true);
     setProcessingStep(0);
-    setCustomStatus('');
+    setCustomStatus('Extracting clinical entities and medications...');
 
     const stepInterval = setInterval(() => {
       setProcessingStep(prev => (prev < 3 ? prev + 1 : prev));
-    }, 450);
+    }, 350);
 
     try {
-      const extractedRecord = await extractMedicalRecord(sampleDataOrText);
+      const extractedRecord = await extractMedicalRecord(sampleDataOrText, { scanId });
       clearInterval(stepInterval);
+      if (currentRequestId !== activeRequestIdRef.current) return;
       setIsProcessing(false);
       onRecordAdded(extractedRecord);
       onClose();
     } catch (err) {
       clearInterval(stepInterval);
+      if (currentRequestId !== activeRequestIdRef.current) return;
       setIsProcessing(false);
-      alert('Error extracting medical record.');
+      setFileError('Error extracting medical record from input.');
     }
   };
 

@@ -179,7 +179,8 @@ export default function App() {
   const handleRawRecordExtracted = (rawRecord) => {
     setPendingVerificationRecord(rawRecord);
     setCurrentTab('verify');
-    setToastMessage(`Record extracted! Please review on the Verify Screen before saving.`);
+    const nameLabel = rawRecord?.sourceFileName ? ` "${rawRecord.sourceFileName}"` : '';
+    setToastMessage(`Prescription${nameLabel} extracted! Please review on the Verify Screen before saving.`);
     setTimeout(() => setToastMessage(''), 5000);
   };
 
@@ -637,6 +638,7 @@ export default function App() {
         {/* 3. Verify Review Screen */}
         {currentTab === 'verify' && (
           <VerifyScreen
+            key={pendingVerificationRecord?.scanId || pendingVerificationRecord?.id || 'verify-screen-instance'}
             rawExtractedData={pendingVerificationRecord}
             onConfirmSave={handleVerifyConfirmed}
             onCancel={() => {

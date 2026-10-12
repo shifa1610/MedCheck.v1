@@ -48,18 +48,32 @@ app.all('/api/tts', handleTTS);
 app.post('/api/upload', upload.single('medicalRecord'), (req, res) => {
   try {
     const file = req.file;
-    if (!file) {
-      return res.status(400).json({ error: 'No file uploaded' });
+    const scanId = `SCAN-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    const timestamp = new Date().toISOString();
+
+    if (!file && !req.body?.text) {
+      return res.status(400).json({ error: 'No file or document text uploaded' });
     }
 
-    // Return receipt
-    res.json({
+    if (file) {
+      return res.json({
+        success: true,
+        scanId,
+        filename: file.filename,
+        originalName: file.originalname,
+        size: file.size,
+        mimetype: file.mimetype,
+        uploadedAt: timestamp,
+        message: 'File ingested successfully into clinical OCR pipeline'
+      });
+    }
+
+    return res.json({
       success: true,
-      filename: file.filename,
-      originalName: file.originalname,
-      size: file.size,
-      mimetype: file.mimetype,
-      message: 'File ingested successfully into clinical OCR pipeline'
+      scanId,
+      textLength: req.body.text?.length || 0,
+      uploadedAt: timestamp,
+      message: 'Prescription text ingested successfully'
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

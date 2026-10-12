@@ -1,5 +1,5 @@
 import Fuse from 'fuse.js';
-import { INDIAN_DRUG_CATALOG, LASA_LOOKALIKE_PAIRS, UNIT_CONVERSIONS } from '../data/drugCatalog';
+import { INDIAN_DRUG_CATALOG, LASA_LOOKALIKE_PAIRS, UNIT_CONVERSIONS } from '../data/drugCatalog.js';
 
 // Flatten catalog for fuzzy search
 const searchableItems = [];

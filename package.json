@@ -10,7 +10,7 @@
     "dev:server": "node server/server.js",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node tests/test_sidebar_and_auth.js && node tests/test_multilingual_tts.js"
+    "test": "node tests/test_prescription_extraction.js && node tests/test_sidebar_and_auth.js && node tests/test_multilingual_tts.js"
   },
   "keywords": [
     "health-copilot",

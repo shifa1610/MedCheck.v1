@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   CheckCircle2, 
   AlertTriangle, 
@@ -14,7 +14,9 @@ import {
   Save,
   RotateCcw,
   Check,
-  Edit3
+  Edit3,
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { validateMedicine } from '../services/validationService';
 
@@ -74,6 +76,42 @@ const DEFAULT_SAMPLE_RECORD = {
   ]
 };
 
+function buildStateFromRecord(base) {
+  const isSample = !base;
+  const target = base || DEFAULT_SAMPLE_RECORD;
+  return {
+    ...target,
+    title: target.title || "Clinical Prescription",
+    facility: target.facility || (isSample ? "Fortis Escorts Heart Clinic" : "Medical Healthcare Clinic"),
+    doctor: target.doctor || (isSample ? "Dr. Rajesh Sharma, MD" : "Attending Physician"),
+    date: target.date || new Date().toISOString().split('T')[0],
+    verificationStatus: target.verificationStatus || "Pending Review",
+    medicines: (target.medications || target.medicines || []).map(m => {
+      const validated = validateMedicine(m.name || m.rawName);
+      return {
+        ...m,
+        name: m.name || m.rawName || 'Unspecified Medicine',
+        dosage: m.dosage || '',
+        frequency: m.frequency || 'As prescribed',
+        matchedName: validated.matchedName || m.name,
+        confidence: m.confidence || validated.confidence || 'medium',
+        status: m.status || (m.confidence === 'high' ? 'Verified' : 'Pending Review'),
+        candidateMatches: m.candidateMatches || validated.candidateMatches || [],
+        lookAlikeWarning: validated.lookAlikeWarning,
+        sourceSnippet: m.sourceSnippet || `Rx Line: "${m.name} ${m.dosage || ''} ${m.frequency || ''}"`
+      };
+    }),
+    testValues: (target.biomarkers || target.testValues || []).map(b => ({
+      ...b,
+      testName: b.name || b.testName,
+      observedValue: b.value || b.observedValue,
+      confidence: b.confidence || 'high',
+      status: b.status || 'Verified',
+      sourceSnippet: b.sourceSnippet || `Report line: "${b.name || b.testName} ... ${b.value || b.observedValue} ${b.unit || ''} (Ref: ${b.referenceRange || '< normal'})"`
+    }))
+  };
+}
+
 export default function VerifyScreen({ 
   rawExtractedData, 
   onConfirmSave, 
@@ -81,43 +119,25 @@ export default function VerifyScreen({
   language,
   isModal = false 
 }) {
-  const [data, setData] = useState(() => {
-    const base = rawExtractedData || DEFAULT_SAMPLE_RECORD;
-    return {
-      ...base,
-      title: base.title || "Clinical Prescription & Lab Orders",
-      facility: base.facility || "Fortis Escorts Heart Clinic",
-      doctor: base.doctor || "Dr. Rajesh Sharma, MD",
-      date: base.date || "2026-03-20",
-      verificationStatus: base.verificationStatus || "Pending Review",
-      medicines: (base.medications || base.medicines || []).map(m => {
-        const validated = validateMedicine(m.name || m.rawName);
-        return {
-          ...m,
-          name: m.name || m.rawName,
-          dosage: m.dosage || '500mg',
-          matchedName: validated.matchedName || m.name,
-          confidence: m.confidence || validated.confidence || 'high',
-          status: m.status || (m.confidence === 'high' ? 'Verified' : 'Pending Review'),
-          candidateMatches: m.candidateMatches || validated.candidateMatches || [],
-          lookAlikeWarning: validated.lookAlikeWarning,
-          sourceSnippet: m.sourceSnippet || `Rx Line: "${m.name} ${m.dosage || ''} ${m.frequency || ''}"`
-        };
-      }),
-      testValues: (base.biomarkers || base.testValues || []).map(b => ({
-        ...b,
-        testName: b.name || b.testName,
-        observedValue: b.value || b.observedValue,
-        confidence: b.confidence || 'high',
-        status: b.status || 'Verified',
-        sourceSnippet: b.sourceSnippet || `Report line: "${b.name || b.testName} ... ${b.value || b.observedValue} ${b.unit || ''} (Ref: ${b.referenceRange || '< normal'})"`
-      }))
-    };
-  });
-
+  const [data, setData] = useState(() => buildStateFromRecord(rawExtractedData));
   const [activeSnippet, setActiveSnippet] = useState(null);
-  const [overallStatus, setOverallStatus] = useState('Pending Review');
+  const [overallStatus, setOverallStatus] = useState(() => {
+    if (rawExtractedData?.verificationStatus?.includes('Needs Review')) return 'Needs Correction';
+    return rawExtractedData?.verificationStatus || 'Pending Review';
+  });
   const [saveToast, setSaveToast] = useState(false);
+
+  // Synchronize state when a new upload or scan is passed to rawExtractedData
+  useEffect(() => {
+    if (rawExtractedData) {
+      setData(buildStateFromRecord(rawExtractedData));
+      setOverallStatus(
+        rawExtractedData.verificationStatus?.includes('Needs Review') 
+          ? 'Needs Correction' 
+          : (rawExtractedData.verificationStatus || 'Pending Review')
+      );
+    }
+  }, [rawExtractedData]);
 
   const handleSelectCandidate = (index, candidateName) => {
     setData(prev => {
@@ -141,12 +161,53 @@ export default function VerifyScreen({
     });
   };
 
+  const handleUpdateMedicineDosage = (index, newDosage) => {
+    setData(prev => {
+      const updated = [...prev.medicines];
+      updated[index] = { ...updated[index], dosage: newDosage };
+      return { ...prev, medicines: updated };
+    });
+  };
+
+  const handleUpdateMedicineFrequency = (index, newFreq) => {
+    setData(prev => {
+      const updated = [...prev.medicines];
+      updated[index] = { ...updated[index], frequency: newFreq };
+      return { ...prev, medicines: updated };
+    });
+  };
+
   const handleUpdateMedicineStatus = (index, newStatus) => {
     setData(prev => {
       const updated = [...prev.medicines];
       updated[index] = { ...updated[index], status: newStatus };
       return { ...prev, medicines: updated };
     });
+  };
+
+  const handleRemoveMedicine = (index) => {
+    setData(prev => ({
+      ...prev,
+      medicines: prev.medicines.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleAddMedicine = () => {
+    setData(prev => ({
+      ...prev,
+      medicines: [
+        ...prev.medicines,
+        {
+          name: '',
+          dosage: '',
+          frequency: 'Once daily (OD)',
+          confidence: 'medium',
+          status: 'Pending Review',
+          candidateMatches: [],
+          sourceSnippet: 'Manually added by user'
+        }
+      ]
+    }));
   };
 
   const handleUpdateTestStatus = (index, newStatus) => {
@@ -320,95 +381,148 @@ export default function VerifyScreen({
           {/* Prescriptions Section */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                <Pill className="w-4 h-4 text-emerald-600" />
-                Prescribed Medications ({data.medicines.length})
-              </h3>
-              <span className="text-[11px] text-slate-500">Edit fields directly to correct errors</span>
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                  <Pill className="w-4 h-4 text-emerald-600" />
+                  Prescribed Medications ({data.medicines.length})
+                </h3>
+                <span className="text-[11px] text-slate-500">Edit fields directly to correct errors</span>
+              </div>
+              <button
+                onClick={handleAddMedicine}
+                className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold rounded-lg border border-emerald-200 transition-colors cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Medicine</span>
+              </button>
             </div>
 
-            <div className="space-y-3">
-              {data.medicines.map((med, idx) => (
-                <div
-                  key={idx}
-                  className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-2xs hover:border-emerald-300 transition-colors"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-700">Med #{idx + 1}</span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                        med.confidence === 'high' 
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-                          : 'bg-amber-50 text-amber-800 border border-amber-200'
-                      }`}>
-                        {med.confidence.toUpperCase()} CONFIDENCE
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] text-slate-500">Status:</span>
-                      <select
-                        value={med.status}
-                        onChange={(e) => handleUpdateMedicineStatus(idx, e.target.value)}
-                        className={`text-xs font-semibold px-2 py-0.5 rounded border cursor-pointer ${
-                          med.status === 'Verified'
-                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                            : med.status === 'Needs Correction'
-                              ? 'bg-rose-50 text-rose-800 border-rose-200'
-                              : 'bg-amber-50 text-amber-800 border-amber-200'
-                        }`}
-                      >
-                        <option value="Pending Review">Pending Review</option>
-                        <option value="Verified">Verified</option>
-                        <option value="Needs Correction">Needs Correction</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[11px] font-semibold text-slate-600 block mb-1">
-                        Medicine Name
-                      </label>
-                      <input
-                        type="text"
-                        value={med.name}
-                        onChange={(e) => handleUpdateMedicineName(idx, e.target.value)}
-                        className="w-full text-xs font-semibold text-slate-900 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 focus:bg-white focus:border-emerald-500 focus:outline-hidden"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[11px] font-semibold text-slate-600 block mb-1">
-                        Dosage & Schedule
-                      </label>
-                      <input
-                        type="text"
-                        value={`${med.dosage || ''} • ${med.frequency || ''}`}
-                        readOnly
-                        className="w-full text-xs text-slate-600 bg-slate-100 border border-slate-200 rounded-lg px-2.5 py-1.5 cursor-not-allowed"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Candidate matches if confidence is not high */}
-                  {med.candidateMatches && med.candidateMatches.length > 0 && (
-                    <div className="mt-2.5 pt-2 border-t border-slate-100 flex flex-wrap items-center gap-1.5">
-                      <span className="text-[11px] text-slate-500">Suggestions:</span>
-                      {med.candidateMatches.map((cand, cIdx) => (
-                        <button
-                          key={cIdx}
-                          onClick={() => handleSelectCandidate(idx, cand)}
-                          className="text-[11px] bg-slate-100 hover:bg-emerald-50 hover:text-emerald-800 text-slate-700 px-2 py-0.5 rounded border border-slate-200 transition-colors cursor-pointer"
-                        >
-                          ✔ {cand}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+            {data.medicines.length === 0 ? (
+              <div className="p-6 bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl text-center space-y-2.5">
+                <AlertCircle className="w-8 h-8 text-amber-500 mx-auto" />
+                <div>
+                  <p className="text-xs font-bold text-slate-800">No medications identified automatically</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    This can happen with blurry images or non-prescription pages. Click below to add medicines manually.
+                  </p>
                 </div>
-              ))}
-            </div>
+                <button
+                  onClick={handleAddMedicine}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add First Medicine</span>
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {data.medicines.map((med, idx) => (
+                  <div
+                    key={idx}
+                    className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-2xs hover:border-emerald-300 transition-colors"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-700">Med #{idx + 1}</span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                          med.confidence === 'high' 
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                            : 'bg-amber-50 text-amber-800 border border-amber-200'
+                        }`}>
+                          {med.confidence.toUpperCase()} CONFIDENCE
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] text-slate-500">Status:</span>
+                          <select
+                            value={med.status}
+                            onChange={(e) => handleUpdateMedicineStatus(idx, e.target.value)}
+                            className={`text-xs font-semibold px-2 py-0.5 rounded border cursor-pointer ${
+                              med.status === 'Verified'
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                : med.status === 'Needs Correction'
+                                  ? 'bg-rose-50 text-rose-800 border-rose-200'
+                                  : 'bg-amber-50 text-amber-800 border-amber-200'
+                            }`}
+                          >
+                            <option value="Pending Review">Pending Review</option>
+                            <option value="Verified">Verified</option>
+                            <option value="Needs Correction">Needs Correction</option>
+                          </select>
+                        </div>
+
+                        <button
+                          onClick={() => handleRemoveMedicine(idx)}
+                          className="p-1 text-slate-400 hover:text-rose-600 rounded transition-colors cursor-pointer"
+                          title="Remove this medicine"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      <div className="sm:col-span-1">
+                        <label className="text-[11px] font-semibold text-slate-600 block mb-1">
+                          Medicine Name
+                        </label>
+                        <input
+                          type="text"
+                          value={med.name}
+                          onChange={(e) => handleUpdateMedicineName(idx, e.target.value)}
+                          placeholder="e.g. Amoxicillin"
+                          className="w-full text-xs font-semibold text-slate-900 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 focus:bg-white focus:border-emerald-500 focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-600 block mb-1">
+                          Dosage / Strength
+                        </label>
+                        <input
+                          type="text"
+                          value={med.dosage || ''}
+                          onChange={(e) => handleUpdateMedicineDosage(idx, e.target.value)}
+                          placeholder="e.g. 500mg, 40mg, 10ml"
+                          className="w-full text-xs font-semibold text-slate-900 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 focus:bg-white focus:border-emerald-500 focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-600 block mb-1">
+                          Schedule / Frequency
+                        </label>
+                        <input
+                          type="text"
+                          value={med.frequency || ''}
+                          onChange={(e) => handleUpdateMedicineFrequency(idx, e.target.value)}
+                          placeholder="e.g. 1-0-1, OD, TDS"
+                          className="w-full text-xs font-semibold text-slate-900 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 focus:bg-white focus:border-emerald-500 focus:outline-hidden"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Candidate matches if confidence is not high */}
+                    {med.candidateMatches && med.candidateMatches.length > 0 && (
+                      <div className="mt-2.5 pt-2 border-t border-slate-100 flex flex-wrap items-center gap-1.5">
+                        <span className="text-[11px] text-slate-500">Suggestions:</span>
+                        {med.candidateMatches.map((cand, cIdx) => (
+                          <button
+                            key={cIdx}
+                            onClick={() => handleSelectCandidate(idx, cand)}
+                            className="text-[11px] bg-slate-100 hover:bg-emerald-50 hover:text-emerald-800 text-slate-700 px-2 py-0.5 rounded border border-slate-200 transition-colors cursor-pointer"
+                          >
+                            ✔ {cand}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Test Values Section */}
