@@ -96,33 +96,44 @@ export default function VisitPrepBrief({ patient, records }) {
         <div className="mt-6">
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 mb-3 flex items-center gap-1.5 border-b border-slate-200 pb-1">
             <Activity className="w-4 h-4 text-teal-600" />
-            1. Recent Diagnostic Shifts & Vitals (Printed Reference Limits)
+            1. Recent Diagnostic Shifts & Vitals ({latestLab?.facility || 'Lab Report'} • {latestLab?.date || 'Latest'})
           </h3>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-              <div className="text-slate-500">HbA1c (3-Month Sugar)</div>
-              <div className="text-base font-bold text-rose-700 mt-0.5">8.2 %</div>
-              <div className="text-[10px] text-slate-500">Printed Ref: &lt; 5.7% (Above)</div>
-            </div>
-
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-              <div className="text-slate-500">Fasting Blood Sugar</div>
-              <div className="text-base font-bold text-rose-700 mt-0.5">142 mg/dL</div>
-              <div className="text-[10px] text-slate-500">Printed Ref: 70-100 (Above)</div>
-            </div>
-
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-              <div className="text-slate-500">LDL Cholesterol</div>
-              <div className="text-base font-bold text-rose-700 mt-0.5">154 mg/dL</div>
-              <div className="text-[10px] text-slate-500">Printed Ref: &lt; 100 (Above)</div>
-            </div>
-
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-              <div className="text-slate-500">Kidney Creatinine</div>
-              <div className="text-base font-bold text-emerald-700 mt-0.5">1.05 mg/dL</div>
-              <div className="text-[10px] text-slate-500">Printed Ref: 0.7-1.3 (Normal)</div>
-            </div>
+            {latestLab?.biomarkers && latestLab.biomarkers.length > 0 ? (
+              latestLab.biomarkers.slice(0, 4).map((b, i) => (
+                <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <div className="text-slate-500 truncate">{b.name}</div>
+                  <div className={`text-base font-bold mt-0.5 ${b.status === 'High' ? 'text-rose-700' : 'text-emerald-700'}`}>
+                    {b.value} {b.unit}
+                  </div>
+                  <div className="text-[10px] text-slate-500">Ref: {b.referenceRange} ({b.status || 'Reported'})</div>
+                </div>
+              ))
+            ) : (
+              <>
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <div className="text-slate-500">HbA1c (3-Month Sugar)</div>
+                  <div className="text-base font-bold text-rose-700 mt-0.5">8.2 %</div>
+                  <div className="text-[10px] text-slate-500">Printed Ref: &lt; 5.7% (Above)</div>
+                </div>
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <div className="text-slate-500">Fasting Blood Sugar</div>
+                  <div className="text-base font-bold text-rose-700 mt-0.5">142 mg/dL</div>
+                  <div className="text-[10px] text-slate-500">Printed Ref: 70-100 (Above)</div>
+                </div>
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <div className="text-slate-500">LDL Cholesterol</div>
+                  <div className="text-base font-bold text-rose-700 mt-0.5">154 mg/dL</div>
+                  <div className="text-[10px] text-slate-500">Printed Ref: &lt; 100 (Above)</div>
+                </div>
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <div className="text-slate-500">Kidney Creatinine</div>
+                  <div className="text-base font-bold text-emerald-700 mt-0.5">1.05 mg/dL</div>
+                  <div className="text-[10px] text-slate-500">Printed Ref: 0.7-1.3 (Normal)</div>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -133,42 +144,49 @@ export default function VisitPrepBrief({ patient, records }) {
             2. Verified Active Prescription Schedule
           </h3>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left border border-slate-200 rounded-xl overflow-hidden">
-              <thead className="bg-slate-100 text-slate-700 uppercase font-semibold">
-                <tr>
-                  <th className="p-2.5">Medicine Name</th>
-                  <th className="p-2.5">Dose</th>
-                  <th className="p-2.5">Frequency</th>
-                  <th className="p-2.5">Timing & Food Instruction</th>
-                  <th className="p-2.5">Indication</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
-                <tr>
-                  <td className="p-2.5 font-bold text-slate-900">Tab Metformin HCl</td>
-                  <td className="p-2.5 font-mono">500 mg</td>
-                  <td className="p-2.5 font-mono">1-0-1</td>
-                  <td className="p-2.5">After Meals (भोजन के बाद)</td>
-                  <td className="p-2.5 text-slate-600">Type 2 Diabetes Mellitus</td>
-                </tr>
-                <tr>
-                  <td className="p-2.5 font-bold text-slate-900">Tab Telmisartan</td>
-                  <td className="p-2.5 font-mono">40 mg</td>
-                  <td className="p-2.5 font-mono">1-0-0</td>
-                  <td className="p-2.5">Morning after breakfast</td>
-                  <td className="p-2.5 text-slate-600">Essential Hypertension</td>
-                </tr>
-                <tr>
-                  <td className="p-2.5 font-bold text-slate-900">Tab Atorvastatin</td>
-                  <td className="p-2.5 font-mono">20 mg</td>
-                  <td className="p-2.5 font-mono">0-0-1</td>
-                  <td className="p-2.5">Bedtime (रात को सोने से पहले)</td>
-                  <td className="p-2.5 text-slate-600">Dyslipidemia & CAD Prophylaxis</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          {(() => {
+            const activeMeds = [];
+            (records || []).forEach(r => {
+              (r.medications || []).forEach(m => {
+                if (!activeMeds.some(existing => existing.name === m.name)) {
+                  activeMeds.push(m);
+                }
+              });
+            });
+
+            const displayMeds = activeMeds.length > 0 ? activeMeds : [
+              { name: "Tab Metformin HCl", dosage: "500 mg", frequency: "1-0-1", timing: "After Meals (भोजन के बाद)", purpose: "Type 2 Diabetes Mellitus" },
+              { name: "Tab Telmisartan", dosage: "40 mg", frequency: "1-0-0", timing: "Morning after breakfast", purpose: "Essential Hypertension" },
+              { name: "Tab Atorvastatin", dosage: "20 mg", frequency: "0-0-1", timing: "Bedtime (रात को सोने से पहले)", purpose: "Dyslipidemia & CAD Prophylaxis" }
+            ];
+
+            return (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left border border-slate-200 rounded-xl overflow-hidden">
+                  <thead className="bg-slate-100 text-slate-700 uppercase font-semibold">
+                    <tr>
+                      <th className="p-2.5">Medicine Name</th>
+                      <th className="p-2.5">Dose</th>
+                      <th className="p-2.5">Frequency</th>
+                      <th className="p-2.5">Timing & Food Instruction</th>
+                      <th className="p-2.5">Indication</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {displayMeds.map((med, idx) => (
+                      <tr key={idx}>
+                        <td className="p-2.5 font-bold text-slate-900">{med.name}</td>
+                        <td className="p-2.5 font-mono">{med.dosage}</td>
+                        <td className="p-2.5 font-mono">{med.frequency}</td>
+                        <td className="p-2.5">{med.timing || 'As prescribed'}</td>
+                        <td className="p-2.5 text-slate-600">{med.purpose || 'Prescribed indication'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Section 3: 5 Questions for the Doctor */}

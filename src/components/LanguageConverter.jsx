@@ -174,10 +174,12 @@ export default function LanguageConverter() {
 
   // Dynamic live converter across 8 languages
   const handleTranslate = (chosenTarget = targetLang, textToTranslate = inputText) => {
-    const text = (textToTranslate || '').toLowerCase();
+    const target = typeof chosenTarget === 'string' ? chosenTarget : targetLang;
+    const textStr = typeof textToTranslate === 'string' ? textToTranslate : (inputText || '');
+    const text = textStr.toLowerCase();
     let result = "";
 
-    if (chosenTarget === 'te') {
+    if (target === 'te') {
       if (text.includes('metformin') || text.includes('food') || text.includes('sugar')) {
         result = "భోజనం తర్వాత రోజుకు రెండుసార్లు మెట్‌ఫార్మిన్ 500mg 1 మాత్ర వేసుకోండి. ఖాళీ కడుపు చక్కెర స్థాయి 142 mg/dL వద్ద ఎక్కువగా ఉంది. రోజువారీ నడక అలవాటు చేసుకోండి.";
       } else if (text.includes('chest') || text.includes('pain') || text.includes('heart')) {
@@ -327,7 +329,7 @@ export default function LanguageConverter() {
             <div className="mt-3 flex items-center justify-between">
               <VoicePlayer text={inputText} language={sourceLang} label="Speak Source" />
               <button
-                onClick={handleTranslate}
+                onClick={() => handleTranslate(targetLang, inputText)}
                 className="bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-xs cursor-pointer"
               >
                 Translate Now →
