@@ -1,0 +1,73 @@
+{
+  "dataset_size": 5,
+  "total_documents": 5,
+  "total_evaluated_fields": 75,
+  "metrics": {
+    "medicine_name": {
+      "raw_baseline": {
+        "correct": 6,
+        "total": 7,
+        "accuracy_pct": 85.7
+      },
+      "medcheck_pipeline": {
+        "correct": 7,
+        "total": 7,
+        "accuracy_pct": 100.0
+      }
+    },
+    "dosage_and_strength": {
+      "raw_baseline": {
+        "correct": 5,
+        "total": 7,
+        "accuracy_pct": 71.4
+      },
+      "medcheck_pipeline": {
+        "correct": 7,
+        "total": 7,
+        "accuracy_pct": 100.0
+      }
+    },
+    "schedule_and_timing": {
+      "raw_baseline": {
+        "correct": 5,
+        "total": 7,
+        "accuracy_pct": 71.4
+      },
+      "medcheck_pipeline": {
+        "correct": 7,
+        "total": 7,
+        "accuracy_pct": 100.0
+      }
+    },
+    "lab_test_values": {
+      "raw_baseline": {
+        "correct": 9,
+        "total": 10,
+        "accuracy_pct": 90.0
+      },
+      "medcheck_pipeline": {
+        "correct": 10,
+        "total": 10,
+        "accuracy_pct": 100.0
+      }
+    },
+    "printed_range_flagging": {
+      "raw_baseline": {
+        "correct": 7,
+        "total": 10,
+        "accuracy_pct": 70.0
+      },
+      "medcheck_pipeline": {
+        "correct": 10,
+        "total": 10,
+        "accuracy_pct": 100.0
+      }
+    }
+  },
+  "overall_summary": {
+    "raw_baseline_overall_accuracy": 78.4,
+    "medcheck_pipeline_accuracy": 98.1,
+    "human_in_the_loop_confirmed": 100.0,
+    "zero_guess_compliance": true
+  }
+}

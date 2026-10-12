@@ -1,0 +1,194 @@
+[
+  {
+    "documentId": "DOC-001",
+    "documentType": "prescription",
+    "facility": "Fortis Escorts Heart Institute",
+    "date": "2026-09-18",
+    "doctor": "Dr. Rajesh Sharma, MD",
+    "medicines": [
+      {
+        "rawName": "Tab Metformin HCl",
+        "matchedName": "Metformin Hydrochloride",
+        "strength": "500 mg",
+        "schedule": "1-0-1",
+        "timing": "after_food",
+        "duration": "90 days"
+      },
+      {
+        "rawName": "Tab Telmisartan",
+        "matchedName": "Telmisartan",
+        "strength": "40 mg",
+        "schedule": "1-0-0",
+        "timing": "after_food",
+        "duration": "90 days"
+      },
+      {
+        "rawName": "Tab Atorvastatin",
+        "matchedName": "Atorvastatin Calcium",
+        "strength": "20 mg",
+        "schedule": "0-0-1",
+        "timing": "bedtime",
+        "duration": "90 days"
+      }
+    ],
+    "testValues": [],
+    "diagnoses": ["Type 2 Diabetes Mellitus", "Essential Hypertension", "Dyslipidemia"]
+  },
+  {
+    "documentId": "DOC-002",
+    "documentType": "lab_report",
+    "facility": "Apollo Diagnostics",
+    "date": "2026-10-02",
+    "doctor": "Dr. K. S. Rao, MD",
+    "medicines": [],
+    "testValues": [
+      {
+        "testName": "HbA1c",
+        "loincCode": "4548-4",
+        "observedValue": 8.2,
+        "printedUnit": "%",
+        "printedReferenceRange": "< 5.7 %",
+        "flag": "above_range"
+      },
+      {
+        "testName": "Fasting Blood Glucose",
+        "loincCode": "1558-6",
+        "observedValue": 142.0,
+        "printedUnit": "mg/dL",
+        "printedReferenceRange": "70 - 100 mg/dL",
+        "flag": "above_range"
+      },
+      {
+        "testName": "Total Cholesterol",
+        "loincCode": "2093-3",
+        "observedValue": 228.0,
+        "printedUnit": "mg/dL",
+        "printedReferenceRange": "< 200 mg/dL",
+        "flag": "above_range"
+      },
+      {
+        "testName": "LDL Cholesterol",
+        "loincCode": "13457-7",
+        "observedValue": 154.0,
+        "printedUnit": "mg/dL",
+        "printedReferenceRange": "< 100 mg/dL",
+        "flag": "above_range"
+      },
+      {
+        "testName": "Serum Creatinine",
+        "loincCode": "2160-0",
+        "observedValue": 1.05,
+        "printedUnit": "mg/dL",
+        "printedReferenceRange": "0.7 - 1.3 mg/dL",
+        "flag": "normal"
+      }
+    ],
+    "diagnoses": []
+  },
+  {
+    "documentId": "DOC-003",
+    "documentType": "discharge_summary",
+    "facility": "Max Super Speciality Hospital",
+    "date": "2026-06-12",
+    "doctor": "Dr. Arvind Chawla, MS, MCh",
+    "medicines": [
+      {
+        "rawName": "Tab Aspirin",
+        "matchedName": "Aspirin",
+        "strength": "75 mg",
+        "schedule": "0-1-0",
+        "timing": "after_food",
+        "duration": "180 days"
+      },
+      {
+        "rawName": "Tab Clopidogrel",
+        "matchedName": "Clopidogrel",
+        "strength": "75 mg",
+        "schedule": "1-0-0",
+        "timing": "after_food",
+        "duration": "180 days"
+      }
+    ],
+    "testValues": [
+      {
+        "testName": "Systolic BP",
+        "loincCode": "8480-6",
+        "observedValue": 126.0,
+        "printedUnit": "mmHg",
+        "printedReferenceRange": "< 130 mmHg",
+        "flag": "normal"
+      },
+      {
+        "testName": "Diastolic BP",
+        "loincCode": "8462-4",
+        "observedValue": 80.0,
+        "printedUnit": "mmHg",
+        "printedReferenceRange": "< 85 mmHg",
+        "flag": "normal"
+      }
+    ],
+    "diagnoses": ["Coronary Artery Disease", "Status Post PCI LAD Stenting"]
+  },
+  {
+    "documentId": "DOC-004",
+    "documentType": "lab_report",
+    "facility": "Suburban Diagnostics Lab",
+    "date": "2026-04-10",
+    "doctor": "Dr. P. Nair, MD",
+    "medicines": [],
+    "testValues": [
+      {
+        "testName": "HbA1c",
+        "loincCode": "4548-4",
+        "observedValue": 8.8,
+        "printedUnit": "%",
+        "printedReferenceRange": "< 5.7 %",
+        "flag": "above_range"
+      },
+      {
+        "testName": "Fasting Blood Glucose",
+        "loincCode": "1558-6",
+        "observedValue": 160.0,
+        "printedUnit": "mg/dL",
+        "printedReferenceRange": "70 - 100 mg/dL",
+        "flag": "above_range"
+      },
+      {
+        "testName": "Total Cholesterol",
+        "loincCode": "2093-3",
+        "observedValue": 245.0,
+        "printedUnit": "mg/dL",
+        "printedReferenceRange": "< 200 mg/dL",
+        "flag": "above_range"
+      }
+    ],
+    "diagnoses": []
+  },
+  {
+    "documentId": "DOC-005",
+    "documentType": "prescription",
+    "facility": "City Care Primary Health Clinic",
+    "date": "2026-08-01",
+    "doctor": "Dr. Ananya Sen, MBBS",
+    "medicines": [
+      {
+        "rawName": "Tab Pantoprazole",
+        "matchedName": "Pantoprazole",
+        "strength": "40 mg",
+        "schedule": "1-0-0",
+        "timing": "before_food",
+        "duration": "14 days"
+      },
+      {
+        "rawName": "Tab Paracetamol",
+        "matchedName": "Paracetamol",
+        "strength": "650 mg",
+        "schedule": "SOS",
+        "timing": "sos",
+        "duration": "5 days"
+      }
+    ],
+    "testValues": [],
+    "diagnoses": ["Acute Gastritis", "Mild Fever"]
+  }
+]

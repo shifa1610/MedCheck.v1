@@ -1,0 +1,102 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MedCheckExtractionContract",
+  "type": "object",
+  "required": [
+    "documentId",
+    "documentType",
+    "facility",
+    "date",
+    "medicines",
+    "testValues",
+    "diagnoses"
+  ],
+  "properties": {
+    "documentId": { "type": "string" },
+    "documentType": {
+      "type": "string",
+      "enum": ["prescription", "lab_report", "discharge_summary", "diagnostic_record"]
+    },
+    "date": {
+      "type": "object",
+      "required": ["value", "confidence", "sourceSnippet"],
+      "properties": {
+        "value": { "type": "string", "format": "date" },
+        "confidence": { "type": "string", "enum": ["high", "medium", "low", "unreadable"] },
+        "sourceSnippet": { "type": "string" }
+      }
+    },
+    "facility": {
+      "type": "object",
+      "required": ["name", "confidence"],
+      "properties": {
+        "name": { "type": "string" },
+        "confidence": { "type": "string", "enum": ["high", "medium", "low"] }
+      }
+    },
+    "doctor": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "regNumber": { "type": "string" },
+        "confidence": { "type": "string", "enum": ["high", "medium", "low"] }
+      }
+    },
+    "medicines": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["rawName", "confidence", "schedule"],
+        "properties": {
+          "rawName": { "type": "string" },
+          "matchedName": { "type": "string" },
+          "strength": { "type": "string" },
+          "schedule": { "type": "string" },
+          "timing": { "type": "string", "enum": ["before_food", "after_food", "with_food", "bedtime", "sos", "unspecified"] },
+          "duration": { "type": "string" },
+          "confidence": { "type": "string", "enum": ["high", "medium", "low", "unreadable"] },
+          "candidateMatches": {
+            "type": "array",
+            "items": { "type": "string" },
+            "maxItems": 3
+          },
+          "lookAlikeWarning": { "type": "string" },
+          "sourceSnippet": { "type": "string" }
+        }
+      }
+    },
+    "testValues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["testName", "observedValue", "printedUnit", "printedReferenceRange", "confidence"],
+        "properties": {
+          "testName": { "type": "string" },
+          "loincCode": { "type": "string" },
+          "observedValue": { "type": "number" },
+          "printedUnit": { "type": "string" },
+          "normalizedUnit": { "type": "string" },
+          "normalizedValue": { "type": "number" },
+          "printedReferenceRange": { "type": "string" },
+          "rangeLow": { "type": "number" },
+          "rangeHigh": { "type": "number" },
+          "flag": { "type": "string", "enum": ["normal", "above_range", "below_range", "critical_printed", "unspecified"] },
+          "confidence": { "type": "string", "enum": ["high", "medium", "low", "unreadable"] },
+          "sourceSnippet": { "type": "string" }
+        }
+      }
+    },
+    "diagnoses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["condition", "confidence"],
+        "properties": {
+          "condition": { "type": "string" },
+          "confidence": { "type": "string", "enum": ["high", "medium", "low"] },
+          "icd10": { "type": "string" }
+        }
+      }
+    }
+  }
+}
