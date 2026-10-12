@@ -1,12 +1,40 @@
 /**
- * MedCheck Dual-Engine Voice Service
- * Supports:
- * Tier 1: Native Browser Web Speech Synthesis (when regional voice is installed)
- * Tier 2: High-Definition Regional Audio Streaming (for Indian languages on Windows/browsers lacking local packs)
+ * MedCheck Multilingual Voice Service
+ * Comprehensive Speech Architecture supporting all 8 Indian Languages:
+ * English (en-IN), Hindi (hi-IN), Telugu (te-IN), Tamil (ta-IN),
+ * Kannada (kn-IN), Malayalam (ml-IN), Marathi (mr-IN), Gujarati (gu-IN)
+ *
+ * Tier 1: Browser Web Speech API (Used when a genuine native regional voice is installed)
+ * Tier 2: Server-side High-Fidelity Audio Streaming via /api/tts (Used when regional voice pack is missing, e.g. on Windows)
  */
 
-function cleanSpeechText(text) {
-  if (!text) return '';
+export const BCP47_LOCALES = {
+  en: 'en-IN',
+  hi: 'hi-IN',
+  te: 'te-IN',
+  ta: 'ta-IN',
+  kn: 'kn-IN',
+  ml: 'ml-IN',
+  mr: 'mr-IN',
+  gu: 'gu-IN'
+};
+
+export const LANGUAGE_NAMES = {
+  en: 'English (India)',
+  hi: 'हिन्दी (Hindi)',
+  te: 'తెలుగు (Telugu)',
+  ta: 'தமிழ் (Tamil)',
+  kn: 'ಕನ್ನಡ (Kannada)',
+  ml: 'മലയാളം (Malayalam)',
+  mr: 'मराठी (Marathi)',
+  gu: 'ગુજરાતી (Gujarati)'
+};
+
+/**
+ * Strips markdown and clinical formatting for clean pronunciation
+ */
+export function cleanSpeechText(text) {
+  if (!text || typeof text !== 'string') return '';
   return text
     .replace(/\*\*(.*?)\*\*/g, '$1')
     .replace(/#{1,6}\s+/g, '')
@@ -16,9 +44,12 @@ function cleanSpeechText(text) {
     .trim();
 }
 
-function splitIntoChunks(text, maxLength = 160) {
+/**
+ * Splits text into natural sentence/clause chunks for fluid audio streaming
+ */
+export function splitIntoChunks(text, maxLength = 160) {
   if (!text) return [];
-  // Split on sentence boundaries (period, danda, question, exclamation, semicolon)
+  // Split on punctuation: Indian danda (।), period (.), question mark (?), exclamation (!), semicolon (;)
   const segments = text.split(/(?<=[।\.?!;\n])/g);
   const chunks = [];
   let buffer = '';
@@ -32,7 +63,7 @@ function splitIntoChunks(text, maxLength = 160) {
     } else {
       if (buffer) chunks.push(buffer);
       if (seg.length > maxLength) {
-        // Break long segment by words/commas
+        // Break long segment by comma or whitespace
         const words = seg.split(/(?<=[, ])/g);
         let temp = '';
         for (let w of words) {
@@ -54,7 +85,7 @@ function splitIntoChunks(text, maxLength = 160) {
   return chunks.length > 0 ? chunks : [text.substring(0, maxLength)];
 }
 
-class VoiceService {
+export class VoiceService {
   constructor() {
     this.synth = typeof window !== 'undefined' ? window.speechSynthesis : null;
     this.voices = [];
@@ -63,52 +94,69 @@ class VoiceService {
     this.isPlayingAudio = false;
     this.isPausedAudio = false;
     this.currentAudioRate = 1.0;
-    this.activeCallbacks = { onStart: null, onEnd: null, onError: null };
+    this.currentLang = 'en';
+    this.activeCallbacks = { onStart: null, onEnd: null, onError: null, onLoading: null };
+    this.voicesLoaded = false;
 
     if (this.synth) {
       this.loadVoices();
-      if (this.synth.onvoiceschanged !== undefined) {
-        this.synth.onvoiceschanged = () => this.loadVoices();
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.onvoiceschanged = () => {
+          this.loadVoices();
+        };
       }
     }
   }
 
   loadVoices() {
     if (!this.synth) return;
-    this.voices = this.synth.getVoices() || [];
+    const available = this.synth.getVoices();
+    if (available && available.length > 0) {
+      this.voices = available;
+      this.voicesLoaded = true;
+    }
   }
 
   isSupported() {
-    return true; // Supported via Web Speech or HTML5 Audio Streaming
+    return true; // Web Speech API or Server-Side HTML5 Audio Streaming
+  }
+
+  getLocale(langCode) {
+    const code = (langCode || 'en').toLowerCase();
+    return BCP47_LOCALES[code] || 'en-IN';
   }
 
   /**
-   * Check if browser has a genuine native regional voice for this language
-   * (Does NOT count English fallbacks like Microsoft David)
+   * Strictly verifies if the browser has a GENUINE native regional voice for this language.
+   * NEVER returns true for English fallback voices (e.g. Microsoft David) when lang is non-English.
    */
   hasNativeRegionalVoice(langCode) {
     if (!this.synth) return false;
     const code = (langCode || 'en').toLowerCase();
-    if (code === 'en') return true;
 
     if (!this.voices || this.voices.length === 0) {
       this.loadVoices();
     }
 
+    if (code === 'en') {
+      return this.voices.some(v => v.lang.toLowerCase().startsWith('en'));
+    }
+
     const regionalPrefixes = {
-      hi: ['hi-in', 'hi'],
-      te: ['te-in', 'te'],
-      ta: ['ta-in', 'ta'],
-      kn: ['kn-in', 'kn'],
-      ml: ['ml-in', 'ml'],
-      mr: ['mr-in', 'mr'],
-      gu: ['gu-in', 'gu']
+      hi: ['hi-in', 'hi_in', 'hi'],
+      te: ['te-in', 'te_in', 'te'],
+      ta: ['ta-in', 'ta_in', 'ta'],
+      kn: ['kn-in', 'kn_in', 'kn'],
+      ml: ['ml-in', 'ml_in', 'ml'],
+      mr: ['mr-in', 'mr_in', 'mr'],
+      gu: ['gu-in', 'gu_in', 'gu']
     };
 
     const targetPrefixes = regionalPrefixes[code] || [code];
     return this.voices.some(v => {
       const vLang = v.lang.toLowerCase();
-      return targetPrefixes.some(p => vLang.startsWith(p));
+      // Ensure it starts with target prefix and does NOT start with 'en'
+      return targetPrefixes.some(p => vLang.startsWith(p)) && !vLang.startsWith('en');
     });
   }
 
@@ -119,19 +167,23 @@ class VoiceService {
     }
 
     const regionalPrefixes = {
-      hi: ['hi-in', 'hi'],
-      te: ['te-in', 'te'],
-      ta: ['ta-in', 'ta'],
-      kn: ['kn-in', 'kn'],
-      ml: ['ml-in', 'ml'],
-      mr: ['mr-in', 'mr'],
-      gu: ['gu-in', 'gu'],
+      hi: ['hi-in', 'hi_in', 'hi'],
+      te: ['te-in', 'te_in', 'te'],
+      ta: ['ta-in', 'ta_in', 'ta'],
+      kn: ['kn-in', 'kn_in', 'kn'],
+      ml: ['ml-in', 'ml_in', 'ml'],
+      mr: ['mr-in', 'mr_in', 'mr'],
+      gu: ['gu-in', 'gu_in', 'gu'],
       en: ['en-in', 'en-gb', 'en-us', 'en']
     };
 
     const targetPrefixes = regionalPrefixes[code] || [code];
     for (const prefix of targetPrefixes) {
-      const found = this.voices.find(v => v.lang.toLowerCase().startsWith(prefix));
+      const found = this.voices.find(v => {
+        const vLang = v.lang.toLowerCase();
+        if (code !== 'en' && vLang.startsWith('en')) return false;
+        return vLang.startsWith(prefix);
+      });
       if (found) return found;
     }
 
@@ -139,9 +191,9 @@ class VoiceService {
   }
 
   /**
-   * Primary Speak method
+   * Main speech method
    */
-  speak(text, language = 'en', rate = 1.0, onStart, onEnd, onError) {
+  speak(text, language = 'en', rate = 1.0, onStart, onEnd, onError, onLoading) {
     this.stop();
 
     const cleanText = cleanSpeechText(text);
@@ -151,13 +203,15 @@ class VoiceService {
     }
 
     const lang = (language || 'en').toLowerCase();
-    this.activeCallbacks = { onStart, onEnd, onError };
+    this.currentLang = lang;
+    this.activeCallbacks = { onStart, onEnd, onError, onLoading };
 
-    // TIER 1: Native Web Speech if genuine regional voice is installed (or English)
+    // TIER 1: Native Web Speech API if a compatible regional voice is installed
+    // Only used if language is 'en' OR has genuine regional voice (NEVER use English voice for Indian languages)
     if (this.hasNativeRegionalVoice(lang)) {
       try {
         const utterance = new SpeechSynthesisUtterance(cleanText);
-        utterance.rate = rate;
+        utterance.rate = Math.max(0.5, Math.min(2.0, rate || 1.0));
         utterance.pitch = 1.0;
 
         const voice = this.getNativeRegionalVoice(lang);
@@ -165,37 +219,46 @@ class VoiceService {
           utterance.voice = voice;
           utterance.lang = voice.lang;
         } else {
-          utterance.lang = lang === 'hi' ? 'hi-IN' : lang === 'te' ? 'te-IN' : 'en-IN';
+          utterance.lang = this.getLocale(lang);
         }
 
-        if (onStart) utterance.onstart = onStart;
-        utterance.onend = () => {
-          if (onEnd) onEnd();
+        utterance.onstart = () => {
+          if (this.activeCallbacks.onStart) this.activeCallbacks.onStart();
         };
+
+        utterance.onend = () => {
+          if (this.activeCallbacks.onEnd) this.activeCallbacks.onEnd();
+        };
+
         utterance.onerror = (err) => {
-          console.warn('[WebSpeech Error, attempting Audio Stream fallback]:', err);
-          this.playViaAudioStream(cleanText, lang, rate, onStart, onEnd, onError);
+          console.warn('[WebSpeech synthesis error, switching to Server TTS fallback]:', err);
+          this.playViaAudioStream(cleanText, lang, rate);
         };
 
         this.synth.speak(utterance);
         return;
       } catch (e) {
-        console.warn('[WebSpeech failed, falling back to Audio Stream]:', e);
+        console.warn('[WebSpeech invocation error, falling back to Server TTS]:', e);
       }
     }
 
-    // TIER 2: High-Definition Regional Audio Streamer (Perfect for Indian languages on Windows)
-    this.playViaAudioStream(cleanText, lang, rate, onStart, onEnd, onError);
+    // TIER 2: Server-side Multilingual Audio Streamer (via /api/tts)
+    // Delivers native pronunciation for all 8 Indian languages
+    this.playViaAudioStream(cleanText, lang, rate);
   }
 
   /**
-   * High-Definition Audio Streamer for Indian Regional Languages
+   * Server-side Audio Streaming for Indian Regional Languages
    */
-  playViaAudioStream(text, language, rate, onStart, onEnd, onError) {
+  playViaAudioStream(text, language, rate) {
     const chunks = splitIntoChunks(text, 160);
     if (chunks.length === 0) {
-      if (onEnd) onEnd();
+      if (this.activeCallbacks.onEnd) this.activeCallbacks.onEnd();
       return;
+    }
+
+    if (this.activeCallbacks.onLoading) {
+      this.activeCallbacks.onLoading(true);
     }
 
     this.audioQueue = [...chunks];
@@ -203,7 +266,6 @@ class VoiceService {
     this.isPausedAudio = false;
     this.currentAudioRate = rate;
 
-    if (onStart) onStart();
     this.playNextAudioChunk(language, rate);
   }
 
@@ -212,6 +274,9 @@ class VoiceService {
       this.isPlayingAudio = false;
       this.isPausedAudio = false;
       this.currentAudio = null;
+      if (this.activeCallbacks.onLoading) {
+        this.activeCallbacks.onLoading(false);
+      }
       if (this.activeCallbacks.onEnd) {
         this.activeCallbacks.onEnd();
       }
@@ -220,46 +285,56 @@ class VoiceService {
 
     const chunk = this.audioQueue.shift();
     const encoded = encodeURIComponent(chunk);
-    // Use local proxy with fallback to direct Google TTS
-    const primaryUrl = `/api/tts?lang=${encodeURIComponent(language)}&text=${encoded}`;
-    const fallbackUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(language)}&q=${encoded}`;
+    const audioUrl = `/api/tts?lang=${encodeURIComponent(language)}&text=${encoded}&rate=${encodeURIComponent(rate || 1.0)}`;
 
     const audio = new Audio();
     audio.playbackRate = rate || 1.0;
     this.currentAudio = audio;
 
-    let hasSwitchedToFallback = false;
+    let started = false;
+
+    audio.oncanplay = () => {
+      if (this.activeCallbacks.onLoading) {
+        this.activeCallbacks.onLoading(false);
+      }
+    };
+
+    audio.onplay = () => {
+      if (!started) {
+        started = true;
+        if (this.activeCallbacks.onStart) {
+          this.activeCallbacks.onStart();
+        }
+      }
+    };
 
     audio.onended = () => {
       this.playNextAudioChunk(language, rate);
     };
 
     audio.onerror = (e) => {
-      if (!hasSwitchedToFallback) {
-        hasSwitchedToFallback = true;
-        audio.src = fallbackUrl;
-        audio.play().catch(playErr => {
-          console.warn('[Audio Stream fallback play error]:', playErr);
-          this.playNextAudioChunk(language, rate);
-        });
-      } else {
-        console.warn('[Audio Stream error]:', e);
+      console.warn('[TTS Audio Stream Error]:', e);
+      if (this.audioQueue.length > 0) {
+        // Continue with remaining chunks if available
         this.playNextAudioChunk(language, rate);
+      } else {
+        this.stop();
+        if (this.activeCallbacks.onError) {
+          this.activeCallbacks.onError(`Audio playback error for ${LANGUAGE_NAMES[language] || language}.`);
+        }
       }
     };
 
-    audio.src = primaryUrl;
-    audio.play().catch(err => {
-      if (!hasSwitchedToFallback) {
-        hasSwitchedToFallback = true;
-        audio.src = fallbackUrl;
-        audio.play().catch(fallbackErr => {
-          console.warn('[Audio Play error]:', fallbackErr);
-          if (this.activeCallbacks.onError) {
-            this.activeCallbacks.onError('Could not play audio stream.');
-          }
-          this.stop();
-        });
+    audio.src = audioUrl;
+    audio.play().catch(playErr => {
+      console.warn('[Audio Play Promise Error]:', playErr);
+      if (this.audioQueue.length > 0) {
+        this.playNextAudioChunk(language, rate);
+      } else {
+        this.stop();
+        if (this.activeCallbacks.onError) {
+          this.activeCallbacks.onError(`Failed to play audio for ${LANGUAGE_NAMES[language] || language}.`);
+        }
       }
     });
   }
@@ -303,6 +378,10 @@ class VoiceService {
         this.synth.cancel();
       } catch (e) {}
     }
+
+    if (this.activeCallbacks.onLoading) {
+      this.activeCallbacks.onLoading(false);
+    }
   }
 
   isSpeaking() {
@@ -312,3 +391,14 @@ class VoiceService {
 }
 
 export const voiceService = new VoiceService();
+
+/**
+ * Reusable speech function as specified in architecture requirements:
+ * speakText(translatedText, targetLanguage, speed, callbacks)
+ */
+export function speakText(translatedText, targetLanguage = 'en', speed = 1.0, callbacks = {}) {
+  const { onStart, onEnd, onError, onLoading } = callbacks;
+  return voiceService.speak(translatedText, targetLanguage, speed, onStart, onEnd, onError, onLoading);
+}
+
+export default voiceService;

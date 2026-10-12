@@ -4,6 +4,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
+import { handleTTS } from '../api/tts.js';
 
 dotenv.config();
 
@@ -40,39 +41,8 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Multi-lingual Audio TTS Proxy Endpoint (High-fidelity native pronunciation for Indian languages)
-app.get('/api/tts', async (req, res) => {
-  try {
-    const { text, lang } = req.query;
-    if (!text || typeof text !== 'string') {
-      return res.status(400).json({ error: 'Text query parameter is required' });
-    }
-
-    const cleanText = text.trim().substring(0, 200);
-    const targetLang = (lang || 'en').toLowerCase();
-
-    const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(targetLang)}&q=${encodeURIComponent(cleanText)}`;
-    
-    const response = await fetch(ttsUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      }
-    });
-
-    if (!response.ok) {
-      return res.status(response.status).json({ error: 'Failed to fetch TTS audio stream' });
-    }
-
-    res.setHeader('Content-Type', 'audio/mpeg');
-    res.setHeader('Cache-Control', 'public, max-age=86400');
-    
-    const arrayBuffer = await response.arrayBuffer();
-    res.send(Buffer.from(arrayBuffer));
-  } catch (err) {
-    console.error('[TTS Proxy Error]:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
+// Multi-lingual Audio TTS Proxy Endpoint (Supports Google Cloud TTS, Azure AI Speech & Native High-Fidelity Gateway)
+app.all('/api/tts', handleTTS);
 
 // Upload and Extract endpoint
 app.post('/api/upload', upload.single('medicalRecord'), (req, res) => {
