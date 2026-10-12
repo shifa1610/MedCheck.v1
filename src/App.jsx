@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import Navbar from './components/Navbar';
+import Sidebar from './components/Sidebar';
+import AuthView from './components/AuthView';
 import HealthSummary from './components/HealthSummary';
 import HealthTimeline from './components/HealthTimeline';
 import BiomarkerTrends from './components/BiomarkerTrends';
@@ -14,6 +16,7 @@ import AccuracyDashboard from './components/AccuracyDashboard';
 import VisitPrepBrief from './components/VisitPrepBrief';
 import LanguageConverter from './components/LanguageConverter';
 import MedicineConflictDetector from './components/MedicineConflictDetector';
+import { getCurrentUser, logoutUser } from './utils/auth';
 
 import { 
   FAMILY_MEMBERS, 
@@ -188,6 +191,23 @@ export default function App() {
     setTimeout(() => setToastMessage(''), 5000);
   };
 
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState(() => getCurrentUser());
+
+  const handleLogout = () => {
+    logoutUser();
+    setCurrentUser(null);
+    setToastMessage('You have logged out.');
+    setTimeout(() => setToastMessage(''), 4000);
+  };
+
+  const handleAuthSuccess = (user) => {
+    setCurrentUser(user);
+    setCurrentTab('dashboard');
+    setToastMessage(`Welcome back, ${user.name}!`);
+    setTimeout(() => setToastMessage(''), 4000);
+  };
+
   const currentModule = FEATURE_MODULES.find(m => m.id === currentTab);
 
   return (
@@ -201,8 +221,21 @@ export default function App() {
         </div>
       )}
 
-      {/* Navigation */}
+      {/* Navigation Drawer (Sidebar with 11 Feature Cards) */}
+      <Sidebar
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        currentTab={currentTab}
+        onSelectTab={(tab) => setCurrentTab(tab)}
+        pendingVerificationCount={pendingVerificationRecord ? 1 : 0}
+        currentUser={currentUser}
+        onLogout={handleLogout}
+        onOpenAuth={(mode) => setCurrentTab(mode || 'login')}
+      />
+
+      {/* Navigation Header */}
       <Navbar
+        onOpenSidebar={() => setIsSidebarOpen(true)}
         currentTab={currentTab}
         setCurrentTab={setCurrentTab}
         language={language}
@@ -211,14 +244,16 @@ export default function App() {
         currentFamilyKey={currentFamilyKey}
         onFamilyMemberChange={handleFamilyMemberChange}
         onOpenUpload={() => setIsUploadOpen(true)}
-        pendingVerificationCount={pendingVerificationRecord ? 1 : 0}
+        currentUser={currentUser}
+        onLogout={handleLogout}
+        onOpenAuth={(mode) => setCurrentTab(mode || 'login')}
       />
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         
-        {/* Breadcrumb Bar when viewing any non-dashboard tab */}
-        {currentTab !== 'dashboard' && (
+        {/* Breadcrumb Bar when viewing any non-dashboard tab (except login/signup) */}
+        {currentTab !== 'dashboard' && currentTab !== 'login' && currentTab !== 'signup' && (
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3 bg-white border border-emerald-100 rounded-xl px-4 py-2.5 shadow-2xs">
             <div className="flex items-center gap-2 text-xs">
               <button 
@@ -247,6 +282,15 @@ export default function App() {
               ✕ Back to Dashboard
             </button>
           </div>
+        )}
+
+        {/* Authentication View (Login or Sign Up) */}
+        {(currentTab === 'login' || currentTab === 'signup') && (
+          <AuthView
+            initialMode={currentTab === 'signup' ? 'signup' : 'login'}
+            onAuthSuccess={handleAuthSuccess}
+            onCancel={() => setCurrentTab('dashboard')}
+          />
         )}
 
         {/* 1. Health Dashboard Tab */}
