@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { 
   Upload, 
   X, 
@@ -15,11 +15,12 @@ import {
   Check
 } from 'lucide-react';
 import { extractMedicalRecord } from '../services/aiService';
-import { scanMedicalDocument } from '../services/ocrService';
+import { scanHandwrittenPrescription, scanMedicalDocument } from '../services/ocrService';
 import { TRANSLATIONS } from '../data/translations';
+import { getAuthToken } from '../utils/auth';
 import CameraCapture from './CameraCapture';
 
-export default function UploadModal({ isOpen, onClose, onRecordAdded, language }) {
+export default function UploadModal({ isOpen, onClose, onRecordAdded, onScanStart, language }) {
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
 
   const [dragOver, setDragOver] = useState(false);
@@ -29,7 +30,31 @@ export default function UploadModal({ isOpen, onClose, onRecordAdded, language }
   const [processingStep, setProcessingStep] = useState(0);
   const [customStatus, setCustomStatus] = useState('');
   const [textInput, setTextInput] = useState('');
+  const [cloudIcrConsent, setCloudIcrConsent] = useState(false);
   const [activeTab, setActiveTab] = useState('file'); // 'file', 'camera', 'samples', 'text'
+  const [previewUrl, setPreviewUrl] = useState('');
+  const selectedScanId = useRef('');
+  const activeRequest = useRef(0);
+
+  useEffect(() => {
+    if (!selectedFile || !(selectedFile.type.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(selectedFile.name))) {
+      setPreviewUrl('');
+      return undefined;
+    }
+    const objectUrl = URL.createObjectURL(selectedFile);
+    setPreviewUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [selectedFile]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      activeRequest.current += 1;
+      setIsProcessing(false);
+      setSelectedFile(null);
+      setFileError('');
+      setCloudIcrConsent(false);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -42,11 +67,7 @@ export default function UploadModal({ isOpen, onClose, onRecordAdded, language }
 
     // Check extension / type
     const isAllowed = allowedTypes.includes(file.type) || 
-      file.name.endsWith('.pdf') || 
-      file.name.endsWith('.png') || 
-      file.name.endsWith('.jpg') || 
-      file.name.endsWith('.jpeg') || 
-      file.name.endsWith('.webp');
+      /\.(pdf|png|jpe?g|webp)$/i.test(file.name);
 
     if (!isAllowed) {
       setFileError('Invalid file type. Please upload a medical document in PDF, JPG, PNG, or WebP format.');
@@ -63,62 +84,123 @@ export default function UploadModal({ isOpen, onClose, onRecordAdded, language }
 
   const handleFileSelect = (e) => {
     const files = e.dataTransfer ? e.dataTransfer.files : e.target.files;
-    if (!files || files.length === 0) return;
-    const file = files[0];
+    const file = files?.[0];
+    if (e.target?.type === 'file') e.target.value = '';
+    if (!file) return;
+    activeRequest.current += 1;
+    setFileError('');
+    setIsProcessing(false);
+    setCustomStatus('');
+    setCloudIcrConsent(false);
+    onScanStart?.();
     if (validateFile(file)) {
       setSelectedFile(file);
+      selectedScanId.current = globalThis.crypto?.randomUUID?.() || `scan-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     } else {
       setSelectedFile(null);
+      selectedScanId.current = '';
+    }
+  };
+
+  const handleProcessHandwrittenFile = async () => {
+    if (!selectedFile || isProcessing || !cloudIcrConsent) return;
+    if (/\.pdf$/i.test(selectedFile.name) || selectedFile.type === 'application/pdf') {
+      setFileError('Cloud handwriting recognition supports image files only. Upload a prescription page as JPG, PNG, or WebP.');
+      return;
+    }
+
+    const requestNumber = ++activeRequest.current;
+    setIsProcessing(true);
+    setFileError('');
+    setCustomStatus('Sending the image to Google Cloud Vision for handwriting recognition...');
+    onScanStart?.();
+
+    try {
+      const result = await scanHandwrittenPrescription(selectedFile, {
+        scanId: selectedScanId.current,
+        sourceFilename: selectedFile.name
+      });
+      if (requestNumber !== activeRequest.current) return;
+      onRecordAdded(result.structuredRecord);
+      onClose();
+    } catch (error) {
+      if (requestNumber === activeRequest.current) {
+        setFileError(error.message || 'Handwriting recognition failed. Please try a clearer image.');
+      }
+    } finally {
+      if (requestNumber === activeRequest.current) setIsProcessing(false);
     }
   };
 
   const handleProcessSelectedFile = async () => {
-    if (!selectedFile) return;
+    if (!selectedFile || isProcessing) return;
 
+    const file = selectedFile;
+    const scanId = selectedScanId.current;
+    const requestNumber = ++activeRequest.current;
     setIsProcessing(true);
     setProcessingStep(0);
-    setCustomStatus('Reading document...');
+    setFileError('');
 
-    if (selectedFile.type.startsWith('image/')) {
-      try {
-        setCustomStatus('Scanning image text via Tesseract OCR...');
-        const ocrResult = await scanMedicalDocument(selectedFile, ({ percent, statusText }) => {
+    if (/\.pdf$/i.test(file.name) || file.type === 'application/pdf') {
+      setIsProcessing(false);
+      setFileError('PDF text recognition is not configured yet. Upload a page as an image (JPG, PNG, or WebP) instead.');
+      return;
+    }
+
+    if (!(file.type.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(file.name))) {
+      setIsProcessing(false);
+      setFileError('This file type cannot be scanned. Choose a JPG, PNG, or WebP image.');
+      return;
+    }
+
+    try {
+      setCustomStatus(`Scanning ${file.name} with local Tesseract OCR...`);
+      const ocrResult = await scanMedicalDocument(file, ({ percent, statusText }) => {
+        if (requestNumber === activeRequest.current) {
           setCustomStatus(`${statusText} (${percent}%)`);
-        });
+        }
+      }, { scanId, sourceFilename: file.name });
 
-        setIsProcessing(false);
-        onRecordAdded(ocrResult.structuredRecord);
-        onClose();
-      } catch (ocrErr) {
-        console.warn('[Direct OCR fallback]:', ocrErr);
-        handleProcess({ name: selectedFile.name, text: `Medical Record Image: ${selectedFile.name}` });
+      if (requestNumber !== activeRequest.current) return;
+      onRecordAdded(ocrResult.structuredRecord);
+      onClose();
+    } catch (error) {
+      if (requestNumber === activeRequest.current) {
+        setFileError(error.message || 'Could not recognize text in this image. Please try a clearer image.');
       }
-    } else {
-      // PDF or binary file
-      setCustomStatus('Extracting clinical entities and medications from PDF...');
-      handleProcess({ name: selectedFile.name, text: `Medical Record PDF: ${selectedFile.name}` });
+    } finally {
+      if (requestNumber === activeRequest.current) setIsProcessing(false);
     }
   };
 
-  const handleProcess = async (sampleDataOrText) => {
+  const handleProcess = async (sampleDataOrText, sourceFilename = 'Pasted text') => {
+    if (isProcessing) return;
+    const requestNumber = ++activeRequest.current;
+    const scanId = globalThis.crypto?.randomUUID?.() || `scan-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     setIsProcessing(true);
     setProcessingStep(0);
-    setCustomStatus('');
+    setFileError('');
+    setCustomStatus(activeTab === 'samples' ? 'Processing labelled demo sample...' : 'Extracting fields from supplied text...');
+    onScanStart?.(scanId);
 
     const stepInterval = setInterval(() => {
       setProcessingStep(prev => (prev < 3 ? prev + 1 : prev));
     }, 450);
 
     try {
-      const extractedRecord = await extractMedicalRecord(sampleDataOrText);
+      const extractedRecord = await extractMedicalRecord(sampleDataOrText, { scanId, sourceFilename });
       clearInterval(stepInterval);
-      setIsProcessing(false);
+      if (requestNumber !== activeRequest.current) return;
       onRecordAdded(extractedRecord);
       onClose();
     } catch (err) {
       clearInterval(stepInterval);
-      setIsProcessing(false);
-      alert('Error extracting medical record.');
+      if (requestNumber === activeRequest.current) {
+        setFileError(err.message || 'Could not extract text from this input.');
+      }
+    } finally {
+      if (requestNumber === activeRequest.current) setIsProcessing(false);
     }
   };
 
@@ -131,7 +213,7 @@ export default function UploadModal({ isOpen, onClose, onRecordAdded, language }
     } else {
       payload = "Max Super Speciality Hospital Discharge Summary. Diagnosis: Acute Coronary Syndrome, CAD LAD 75% stenosis s/p PCI Stent. Discharge BP 126/80. Dual antiplatelet advised.";
     }
-    handleProcess(payload);
+    handleProcess(payload, `Demo sample — ${sampleType}`);
   };
 
   return (
@@ -279,24 +361,52 @@ export default function UploadModal({ isOpen, onClose, onRecordAdded, language }
                   )}
 
                   {/* Selected File Card */}
-                  {selectedFile && !fileError && (
-                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">
-                      <div className="flex items-center gap-2.5 overflow-hidden">
-                        <FileCheck className="w-5 h-5 text-emerald-700 shrink-0" />
-                        <div className="truncate">
-                          <p className="text-xs font-bold text-slate-900 truncate">{selectedFile.name}</p>
-                          <p className="text-[10px] text-slate-500">
-                            {(selectedFile.size / 1024).toFixed(1)} KB • {selectedFile.type || 'Document'}
-                          </p>
+                  {selectedFile && (
+                    <div className="space-y-2">
+                      <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">
+                        <div className="flex items-center gap-2.5 overflow-hidden">
+                          <FileCheck className="w-5 h-5 text-emerald-700 shrink-0" />
+                          <div className="truncate">
+                            <p className="text-xs font-bold text-slate-900 truncate">{selectedFile.name}</p>
+                            <p className="text-[10px] text-slate-500">
+                              {(selectedFile.size / 1024).toFixed(1)} KB • {selectedFile.type || 'Document'}
+                            </p>
+                          </div>
                         </div>
+                        <button
+                          onClick={handleProcessSelectedFile}
+                          disabled={isProcessing || !!fileError}
+                          className="bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors cursor-pointer shrink-0 ml-2"
+                        >
+                          Extract Data →
+                        </button>
                       </div>
 
-                      <button
-                        onClick={handleProcessSelectedFile}
-                        className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors cursor-pointer shrink-0 ml-2"
-                      >
-                        Extract Data →
-                      </button>
+                      {previewUrl && (
+                        <img src={previewUrl} alt={`Preview of ${selectedFile.name}`} className="max-h-56 w-full rounded-xl border border-slate-200 bg-slate-50 object-contain" />
+                      )}
+
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
+                        <label className="flex items-start gap-2 text-xs text-amber-950">
+                          <input
+                            type="checkbox"
+                            checked={cloudIcrConsent}
+                            onChange={event => setCloudIcrConsent(event.target.checked)}
+                            className="mt-0.5 rounded border-amber-400 text-amber-700 focus:ring-amber-500"
+                          />
+                          <span>I agree to send this image to Google Cloud Vision through the MedCheck server for handwritten-text recognition. The image is not saved by this recognition route.</span>
+                        </label>
+                        {!getAuthToken() && (
+                          <p className="text-[11px] text-amber-900">Sign in with a server account to use cloud handwriting recognition.</p>
+                        )}
+                        <button
+                          onClick={handleProcessHandwrittenFile}
+                          disabled={!cloudIcrConsent || !getAuthToken() || isProcessing || !!fileError}
+                          className="w-full rounded-lg bg-amber-700 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-amber-800 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Recognize Handwriting with Cloud ICR
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -305,6 +415,7 @@ export default function UploadModal({ isOpen, onClose, onRecordAdded, language }
               {activeTab === 'camera' && (
                 <CameraCapture 
                   onDocumentExtracted={onRecordAdded} 
+                  onScanStart={onScanStart}
                   onClose={onClose} 
                 />
               )}
@@ -381,6 +492,7 @@ export default function UploadModal({ isOpen, onClose, onRecordAdded, language }
                   >
                     Extract & Summarize
                   </button>
+                  {fileError && <p role="alert" className="text-xs text-rose-700">{fileError}</p>}
                 </div>
               )}
             </>

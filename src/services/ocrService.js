@@ -1,5 +1,6 @@
 import Tesseract from 'tesseract.js';
-import { extractMedicalRecord } from './aiService';
+import { extractMedicalRecord } from './aiService.js';
+import { recognizeHandwrittenDocument } from '../utils/auth.js';
 
 /**
  * Preprocess image on an in-memory canvas to maximize OCR accuracy:
@@ -72,7 +73,80 @@ export function preprocessCanvas(sourceElement, options = { contrastBoost: true,
  * Real OCR Scanner using Tesseract.js
  * Ingests live video frame, image element, or Blob/DataURL
  */
-export async function scanMedicalDocument(imageSource, onProgress = null) {
+export async function structureOCRResult(result, metadata = {}) {
+  const rawText = result?.data?.text || '';
+  if (!rawText.trim()) {
+    throw new Error('No readable text was found in this image. Try a sharper, well-lit photo.');
+  }
+
+  const confidence = Math.round(result.data.confidence || 0);
+  const scanId = metadata.scanId || globalThis.crypto?.randomUUID?.() || `scan-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const structuredRecord = await extractMedicalRecord(rawText, {
+    scanId,
+    sourceFilename: metadata.sourceFilename || '',
+    ocrConfidence: confidence
+  });
+
+  return {
+    success: true,
+    scanId,
+    sourceFilename: metadata.sourceFilename || '',
+    rawText: rawText.trim(),
+    confidence,
+    structuredRecord: {
+      ...structuredRecord,
+      ocrMetadata: {
+        confidence,
+        wordsCount: result.data.words?.length || 0,
+        scannedAt: new Date().toISOString(),
+        engine: metadata.engine || 'Tesseract.js'
+      }
+    }
+  };
+}
+
+async function imageToBase64(imageSource) {
+  if (typeof imageSource === 'string') {
+    const dataUrlMatch = imageSource.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/);
+    if (!dataUrlMatch) throw new Error('Choose a JPEG, PNG, or WebP image for handwriting recognition.');
+    return { mimeType: dataUrlMatch[1], image: dataUrlMatch[2] };
+  }
+
+  if (!imageSource || typeof imageSource.arrayBuffer !== 'function') {
+    throw new Error('Choose a JPEG, PNG, or WebP image for handwriting recognition.');
+  }
+  const inferredMimeType = {
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.webp': 'image/webp'
+  }[imageSource.name?.match(/\.[^.]+$/)?.[0]?.toLowerCase()];
+  const mimeType = ['image/jpeg', 'image/png', 'image/webp'].includes(imageSource.type)
+    ? imageSource.type
+    : inferredMimeType;
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(mimeType)) {
+    throw new Error('Choose a JPEG, PNG, or WebP image for handwriting recognition.');
+  }
+
+  const bytes = new Uint8Array(await imageSource.arrayBuffer());
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return { mimeType, image: btoa(binary) };
+}
+
+export async function scanHandwrittenPrescription(imageSource, metadata = {}) {
+  const { image, mimeType } = await imageToBase64(imageSource);
+  const result = await recognizeHandwrittenDocument(image, mimeType);
+  return structureOCRResult(
+    { data: { text: result.text, confidence: result.confidence } },
+    { ...metadata, engine: 'Google Cloud Vision handwriting recognition' }
+  );
+}
+
+export async function scanMedicalDocument(imageSource, onProgress = null, metadata = {}) {
   try {
     let target = imageSource;
 
@@ -109,25 +183,7 @@ export async function scanMedicalDocument(imageSource, onProgress = null) {
       }
     );
 
-    const rawText = result.data.text || '';
-    const confidence = Math.round(result.data.confidence || 0);
-
-    // Run clinical NLP extraction on extracted OCR text
-    const structuredRecord = await extractMedicalRecord(rawText);
-
-    return {
-      success: true,
-      rawText: rawText.trim(),
-      confidence,
-      structuredRecord: {
-        ...structuredRecord,
-        ocrMetadata: {
-          confidence,
-          wordsCount: result.data.words?.length || 0,
-          scannedAt: new Date().toISOString()
-        }
-      }
-    };
+    return await structureOCRResult(result, metadata);
   } catch (err) {
     console.error('[OCR Engine Error]:', err);
     throw err;

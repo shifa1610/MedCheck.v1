@@ -13,6 +13,7 @@ import ArchitectureView from './components/ArchitectureView';
 import PresentationSlides from './components/PresentationSlides';
 import UploadModal from './components/UploadModal';
 import VerifyScreen from './components/VerifyScreen';
+import PatientProfileModal from './components/PatientProfileModal';
 import AccuracyDashboard from './components/AccuracyDashboard';
 import VisitPrepBrief from './components/VisitPrepBrief';
 import LanguageConverter from './components/LanguageConverter';
@@ -23,7 +24,9 @@ import {
   getCurrentUser,
   getCurrentUserSession,
   getMedicalRecords,
+  getPatientProfiles,
   logoutUser,
+  createPatientProfile,
   saveMedicalRecord
 } from './utils/auth';
 
@@ -152,6 +155,24 @@ const FEATURE_MODULES = [
   }
 ];
 
+const DEMO_PATIENT_PROFILES = Object.entries(FAMILY_MEMBERS).map(([profileKey, profile]) => ({
+  ...profile,
+  id: profileKey,
+  profileKey,
+  relationship: profile.relation
+}));
+
+function mapPatientProfile(profile) {
+  return {
+    ...profile,
+    id: profile._id || profile.id,
+    relation: profile.relationship || profile.relation || 'Family member',
+    avatarIcon: profile.avatarIcon || '👤',
+    activeConditions: profile.activeConditions || [],
+    allergies: profile.allergies || []
+  };
+}
+
 function mapSavedRecord(record) {
   const recordType = record.recordType === 'lab_report'
     ? 'lab'
@@ -178,7 +199,7 @@ function mapSavedRecord(record) {
   };
 }
 
-function toRecordPayload(record, patientName) {
+function toRecordPayload(record, patient) {
   const recordType = record.type === 'lab' || record.type === 'lab_report' || record.recordType === 'lab_report' ||
     /lab|laboratory/i.test(`${record.category || ''} ${record.title || ''}`)
     ? 'lab_report'
@@ -186,11 +207,20 @@ function toRecordPayload(record, patientName) {
       /discharge/i.test(`${record.category || ''} ${record.title || ''}`)
       ? 'discharge_summary'
       : 'prescription';
+  const recordDate = [record.date, record.recordDate].find(value =>
+    typeof value === 'string' &&
+    value.trim() &&
+    value !== 'Not detected' &&
+    !Number.isNaN(Date.parse(value))
+  );
 
   return {
-    patientName,
+    patientName: patient.name,
+    patientProfileId: patient._id || patient.id || undefined,
     recordType,
-    recordDate: record.date || record.recordDate || new Date().toISOString(),
+    scanId: record.scanId || '',
+    sourceFilename: record.sourceFilename || '',
+    recordDate,
     doctorName: record.doctor || record.doctorName || '',
     clinicHospital: record.facility || record.clinicHospital || '',
     rawText: record.rawText || record.text || record.originalText || record.extractedText || '',
@@ -199,7 +229,10 @@ function toRecordPayload(record, patientName) {
       name: medication.name || medication.rawName || 'Unknown medication',
       dosage: medication.dosage || '',
       frequency: medication.frequency || '',
-      instructions: medication.instructions || ''
+      duration: medication.duration || '',
+      instructions: medication.instructions || '',
+      confidence: medication.confidence || 'low',
+      status: medication.status || 'Needs Review'
     })),
     abnormalFindings: record.abnormalFindings || record.abnormalExplanations || [],
     title: record.title || '',
@@ -213,6 +246,7 @@ function toRecordPayload(record, patientName) {
 }
 
 export default function App() {
+  const hasStoredAuthToken = Boolean(getAuthToken());
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [isAuthPage, setIsAuthPage] = useState(() => (
     window.location.pathname === '/login' || window.location.pathname === '/signup'
@@ -220,13 +254,19 @@ export default function App() {
   const [authPageMode, setAuthPageMode] = useState(() => (
     window.location.pathname === '/signup' ? 'register' : 'login'
   ));
-  const [currentFamilyKey, setCurrentFamilyKey] = useState('papa');
-  const [patient, setPatient] = useState(FAMILY_MEMBERS.papa);
-  const [records, setRecords] = useState(PAPA_RECORDS);
+  const [currentFamilyKey, setCurrentFamilyKey] = useState(hasStoredAuthToken ? '' : 'papa');
+  const [patient, setPatient] = useState(hasStoredAuthToken
+    ? { name: '', relation: '', activeConditions: [], allergies: [] }
+    : FAMILY_MEMBERS.papa);
+  const [patientProfiles, setPatientProfiles] = useState(hasStoredAuthToken ? [] : DEMO_PATIENT_PROFILES);
+  const [records, setRecords] = useState(hasStoredAuthToken ? [] : PAPA_RECORDS);
   const [remoteRecords, setRemoteRecords] = useState([]);
-  const [backendStatus, setBackendStatus] = useState('demo');
-  const [language, setLanguage] = useState(FAMILY_MEMBERS.papa.preferredLanguage || 'en');
+  const [backendStatus, setBackendStatus] = useState(hasStoredAuthToken ? 'loading' : 'demo');
+  const [language, setLanguage] = useState(hasStoredAuthToken ? 'en' : FAMILY_MEMBERS.papa.preferredLanguage || 'en');
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState('');
   const [pendingVerificationRecord, setPendingVerificationRecord] = useState(null);
   const [toastMessage, setToastMessage] = useState('');
 
@@ -261,24 +301,52 @@ export default function App() {
     setCurrentTab('dashboard');
   };
 
-  // Handle switching family profiles (Papa -> Maa -> Self)
-  const handleFamilyMemberChange = (key) => {
-    setCurrentFamilyKey(key);
-    const selected = FAMILY_MEMBERS[key] || FAMILY_MEMBERS.papa;
+  const handlePatientProfileChange = (id) => {
+    const selectedProfile = patientProfiles.find(profile => String(profile.id) === String(id));
+    if (!selectedProfile) return;
+
+    const selected = mapPatientProfile(selectedProfile);
+    const profileKey = selectedProfile.profileKey || String(selectedProfile.id);
+    setCurrentFamilyKey(profileKey);
     setPatient(selected);
-    const savedForPatient = remoteRecords.filter(record => record.patientName === selected.name);
-    if (key === 'papa') {
-      setRecords(savedForPatient.length || backendStatus === 'connected' ? savedForPatient : PAPA_RECORDS);
-      setLanguage(selected.preferredLanguage || 'te');
-    } else if (key === 'maa') {
-      setRecords(savedForPatient.length || backendStatus === 'connected' ? savedForPatient : MAA_RECORDS);
-      setLanguage(selected.preferredLanguage || 'hi');
+    setLanguage(selected.preferredLanguage || 'en');
+
+    if (selectedProfile.profileKey && backendStatus === 'demo') {
+      const demoRecords = selectedProfile.profileKey === 'papa'
+        ? PAPA_RECORDS
+        : selectedProfile.profileKey === 'maa'
+          ? MAA_RECORDS
+          : SELF_RECORDS;
+      setRecords(demoRecords);
     } else {
-      setRecords(savedForPatient.length || backendStatus === 'connected' ? savedForPatient : SELF_RECORDS);
-      setLanguage(selected.preferredLanguage || 'en');
+      setRecords(remoteRecords.filter(record => (
+        String(record.patientProfileId || '') === String(selected.id) ||
+        (!record.patientProfileId && record.patientName === selected.name)
+      )));
     }
     setToastMessage(`Switched profile to ${selected.name} (${selected.relation})`);
     setTimeout(() => setToastMessage(''), 4000);
+  };
+
+  const handleCreatePatientProfile = async (profileData) => {
+    setIsSavingProfile(true);
+    setProfileError('');
+    try {
+      const created = mapPatientProfile(await createPatientProfile(profileData));
+      setPatientProfiles(previous => [...previous, created]);
+      setCurrentFamilyKey(String(created.id));
+      setPatient(created);
+      setRecords(remoteRecords.filter(record => record.patientName === created.name));
+      setLanguage(created.preferredLanguage || 'en');
+      setIsProfileModalOpen(false);
+      setToastMessage(`Patient profile created for ${created.name}.`);
+      setTimeout(() => setToastMessage(''), 4000);
+    } catch (error) {
+      console.error('Failed to create patient profile:', error);
+      setProfileError(error.message || 'Could not create the patient profile. Please try again.');
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
 
   // Called when raw OCR finishes -> sends record to Human-in-the-Loop Verify Screen
@@ -302,7 +370,7 @@ export default function App() {
     }
 
     try {
-      const savedRecord = mapSavedRecord(await saveMedicalRecord(toRecordPayload(verifiedRecord, patient.name)));
+      const savedRecord = mapSavedRecord(await saveMedicalRecord(toRecordPayload(verifiedRecord, patient)));
       setRemoteRecords(prev => [savedRecord, ...prev]);
       setRecords(prev => [savedRecord, ...prev]);
       setBackendStatus('connected');
@@ -341,10 +409,34 @@ export default function App() {
         const user = await getCurrentUserSession();
         if (!isActive) return;
         setCurrentUser(user);
+        const savedProfiles = (await getPatientProfiles()).map(mapPatientProfile);
         const savedRecords = (await getMedicalRecords()).map(mapSavedRecord);
         if (!isActive) return;
+        setPatientProfiles(savedProfiles);
         setRemoteRecords(savedRecords);
-        setRecords(savedRecords.filter(record => record.patientName === patient.name));
+        if (savedProfiles.length) {
+          const selected = savedProfiles[0];
+          setCurrentFamilyKey(String(selected.id));
+          setPatient(selected);
+          setLanguage(selected.preferredLanguage || 'en');
+          setRecords(savedRecords.filter(record => (
+            String(record.patientProfileId || '') === String(selected.id) ||
+            (!record.patientProfileId && record.patientName === selected.name)
+          )));
+        } else {
+          setCurrentFamilyKey('');
+          setPatient({
+            name: user.name,
+            relation: 'Self',
+            age: null,
+            gender: '',
+            activeConditions: [],
+            allergies: [],
+            preferredLanguage: 'en'
+          });
+          setRecords([]);
+          setIsProfileModalOpen(true);
+        }
         setBackendStatus('connected');
       } catch (error) {
         if (!isActive) return;
@@ -354,8 +446,12 @@ export default function App() {
           openAuthPage('login');
         } else {
           setBackendStatus('offline');
+          setPatientProfiles(DEMO_PATIENT_PROFILES);
+          setCurrentFamilyKey('papa');
+          setPatient(FAMILY_MEMBERS.papa);
+          setRecords(PAPA_RECORDS);
           if (!(error instanceof ApiUnavailableError)) {
-            console.error('Failed loading saved medical records:', error);
+            console.error('Failed loading saved patient data:', error);
           }
         }
       }
@@ -370,6 +466,11 @@ export default function App() {
     logoutUser();
     setCurrentUser(null);
     setRemoteRecords([]);
+    setPatientProfiles(DEMO_PATIENT_PROFILES);
+    setCurrentFamilyKey('papa');
+    setPatient(FAMILY_MEMBERS.papa);
+    setRecords(PAPA_RECORDS);
+    setLanguage(FAMILY_MEMBERS.papa.preferredLanguage || 'te');
     setBackendStatus('demo');
     openAuthPage('login');
     setToastMessage('You have logged out.');
@@ -444,13 +545,29 @@ export default function App() {
         language={language}
         setLanguage={setLanguage}
         patient={patient}
-        currentFamilyKey={currentFamilyKey}
-        onFamilyMemberChange={handleFamilyMemberChange}
+        profiles={patientProfiles}
+        selectedProfileId={currentFamilyKey}
+        onSelectProfile={handlePatientProfileChange}
+        onAddProfile={() => {
+          setProfileError('');
+          setIsProfileModalOpen(true);
+        }}
+        canManageProfiles={Boolean(getAuthToken()) && backendStatus !== 'offline'}
         onOpenUpload={() => setIsUploadOpen(true)}
         currentUser={currentUser}
         onLogout={handleLogout}
         onOpenAuth={openAuthPage}
       />
+
+      {isProfileModalOpen && (
+        <PatientProfileModal
+          onClose={patientProfiles.length ? () => setIsProfileModalOpen(false) : undefined}
+          onSave={handleCreatePatientProfile}
+          isSaving={isSavingProfile}
+          error={profileError}
+          canClose={patientProfiles.length > 0}
+        />
+      )}
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -504,7 +621,8 @@ export default function App() {
                         Caregiver Healthcare Project
                       </span>
                       <span className="text-xs text-teal-100 font-medium">
-                        Patient Profile: <strong>{patient.name}</strong> ({patient.relation}, {patient.age}y)
+                        Patient: <strong>{patient.name}</strong>
+                        {patient.relation && ` (${patient.relation}${patient.age != null ? `, ${patient.age}y` : ''})`}
                       </span>
                     </div>
                     <p className="text-xs text-teal-100/90 mt-1 max-w-2xl leading-relaxed">
@@ -604,23 +722,22 @@ export default function App() {
                       <h1 className="text-lg sm:text-xl font-bold text-slate-900">{patient.name}</h1>
                       <span className="bg-teal-50 text-teal-800 border border-teal-200 text-xs font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
                         <CheckCircle2 className="w-3 h-3 text-teal-600" />
-                        <span>Verified Profile</span>
+                        <span>Patient Profile</span>
                       </span>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-slate-500">
-                      <span>{patient.age} years • {patient.gender}</span>
-                      <span>•</span>
-                      <span>Blood Group: <strong className="text-slate-700">{patient.bloodGroup}</strong></span>
-                      <span>•</span>
-                      <span className="font-mono text-slate-700">ABHA: {patient.abhaId}</span>
+                      {patient.age != null && <span>{patient.age} years</span>}
+                      {patient.gender && <span>{patient.gender}</span>}
+                      {patient.bloodGroup && <span>Blood Group: <strong className="text-slate-700">{patient.bloodGroup}</strong></span>}
+                      {patient.abhaId && <span className="font-mono text-slate-700">ABHA: {patient.abhaId}</span>}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                      <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mr-1">
+                      {patient.activeConditions?.length > 0 && <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mr-1">
                         Active Conditions:
-                      </span>
-                      {patient.activeConditions.map((cond, i) => (
+                      </span>}
+                      {(patient.activeConditions || []).map((cond, i) => (
                         <span key={i} className="bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-medium px-2 py-0.5 rounded">
                           {cond}
                         </span>
@@ -650,8 +767,9 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Vitals Quick Gauge Row (Labeled as Demo Data) */}
-              <div className="mt-5 pt-4 border-t border-slate-100">
+              {/* Sample vital indicators are shown only with the demo family profiles. */}
+              {backendStatus === 'demo' && (
+                <div className="mt-5 pt-4 border-t border-slate-100">
                 <div className="flex items-center justify-between mb-2.5">
                   <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                     <Activity className="w-3.5 h-3.5 text-emerald-600" />
@@ -785,10 +903,11 @@ export default function App() {
                   )}
                 </div>
               </div>
+              )}
             </div>
 
             {/* Health Summary with Plain-Language Explanations */}
-            <HealthSummary records={records} patient={patient} language={language} />
+            <HealthSummary records={records} patient={patient} language={language} isDemo={backendStatus !== 'connected'} />
 
             {/* Recent Timeline Preview */}
             <div className="pt-1">
@@ -816,12 +935,14 @@ export default function App() {
             currentFamilyKey={currentFamilyKey}
             records={records}
             language={language}
+             isDemo={backendStatus !== 'connected'}
           />
         )}
 
         {/* 3. Verify Review Screen */}
         {currentTab === 'verify' && (
           <VerifyScreen
+            key={pendingVerificationRecord?.scanId || pendingVerificationRecord?.id || 'empty-review'}
             rawExtractedData={pendingVerificationRecord}
             onConfirmSave={handleVerifyConfirmed}
             onCancel={() => {
@@ -839,13 +960,22 @@ export default function App() {
         )}
 
         {/* 5. Biomarker Trends */}
-        {currentTab === 'trends' && (
+        {currentTab === 'trends' && backendStatus === 'demo' && (
           <BiomarkerTrends language={language} currentFamilyKey={currentFamilyKey} />
+        )}
+        {currentTab === 'trends' && backendStatus !== 'demo' && (
+          <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+            <Activity className="mx-auto h-8 w-8 text-teal-700" />
+            <h2 className="mt-3 text-base font-bold text-slate-900">Your biomarker trends will appear here</h2>
+            <p className="mx-auto mt-1 max-w-lg text-sm text-slate-600">
+              Upload and verify lab reports for {patient.name || 'this patient'} to build a personal history. Sample dashboard trends are hidden for your profiles.
+            </p>
+          </div>
         )}
 
         {/* 6. Medications */}
         {currentTab === 'medications' && (
-          <MedicationTracker records={records} language={language} />
+          <MedicationTracker records={records} language={language} isDemo={backendStatus !== 'connected'} />
         )}
 
         {/* 7. Language & Voice */}
@@ -855,7 +985,7 @@ export default function App() {
 
         {/* 8. Visit-Prep Brief */}
         {currentTab === 'visitprep' && (
-          <VisitPrepBrief patient={patient} records={records} />
+          <VisitPrepBrief patient={patient} records={records} isDemo={backendStatus !== 'connected'} />
         )}
 
         {/* 9. Accuracy Benchmark */}
@@ -875,7 +1005,7 @@ export default function App() {
 
         {/* Optional Secondary Tools */}
         {currentTab === 'copilot' && (
-          <CopilotChat records={records} patient={patient} language={language} />
+          <CopilotChat language={language} />
         )}
 
         {currentTab === 'architecture' && (
@@ -888,6 +1018,10 @@ export default function App() {
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}
         onRecordAdded={handleRawRecordExtracted}
+        onScanStart={() => {
+          setPendingVerificationRecord(null);
+          setCurrentTab('dashboard');
+        }}
         language={language}
       />
 

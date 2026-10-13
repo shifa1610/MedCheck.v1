@@ -18,62 +18,6 @@ import {
 } from 'lucide-react';
 import { validateMedicine } from '../services/validationService';
 
-// Default sample data used if user opens Verify Review directly
-const DEFAULT_SAMPLE_RECORD = {
-  title: "Clinical Prescription & Lab Orders",
-  facility: "Fortis Escorts Heart Clinic",
-  doctor: "Dr. Rajesh Sharma, MD (Cardiology)",
-  date: "2026-03-20",
-  verificationStatus: "Pending Review",
-  medications: [
-    {
-      name: "Metformin 500mg",
-      dosage: "500mg",
-      frequency: "1-0-1 after food (भोजन के बाद)",
-      confidence: "high",
-      status: "Verified",
-      sourceSnippet: 'Rx Line 1: "Tab Metformin 500mg 1-0-1 after food (भोजन के बाद)"'
-    },
-    {
-      name: "Telmisartan 40mg",
-      dosage: "40mg",
-      frequency: "1-0-0 morning",
-      confidence: "medium",
-      status: "Pending Review",
-      candidateMatches: ["Telmisartan 40mg", "Telma 40mg", "Telmikem 40mg"],
-      sourceSnippet: 'Rx Line 2: "Tab Telmisartn 40mg 1-0-0 morning - BP control"'
-    },
-    {
-      name: "Atorvastatin 20mg",
-      dosage: "20mg",
-      frequency: "0-0-1 bedtime",
-      confidence: "high",
-      status: "Verified",
-      sourceSnippet: 'Rx Line 3: "Tab Atorvastatin 20mg 0-0-1 QHS - Post Stent"'
-    }
-  ],
-  biomarkers: [
-    {
-      name: "Fasting Blood Sugar",
-      value: "142",
-      unit: "mg/dL",
-      referenceRange: "70 - 100",
-      status: "Needs Correction",
-      confidence: "medium",
-      sourceSnippet: 'Lab Line 4: "FBS: 142 mg/dL (Reference Range: 70-100 mg/dL)"'
-    },
-    {
-      name: "HbA1c",
-      value: "8.2",
-      unit: "%",
-      referenceRange: "< 5.7",
-      status: "Verified",
-      confidence: "high",
-      sourceSnippet: 'Lab Line 5: "HbA1c: 8.2% (Reference: < 5.7% Normal, 5.7-6.4% Prediabetes)"'
-    }
-  ]
-};
-
 export default function VerifyScreen({ 
   rawExtractedData, 
   onConfirmSave, 
@@ -82,35 +26,38 @@ export default function VerifyScreen({
   isModal = false 
 }) {
   const [data, setData] = useState(() => {
-    const base = rawExtractedData || DEFAULT_SAMPLE_RECORD;
+    const base = rawExtractedData || {};
     return {
       ...base,
-      title: base.title || "Clinical Prescription & Lab Orders",
-      facility: base.facility || "Fortis Escorts Heart Clinic",
-      doctor: base.doctor || "Dr. Rajesh Sharma, MD",
-      date: base.date || "2026-03-20",
+      title: base.title || "Uploaded medical document",
+      facility: base.facility || "Not detected",
+      doctor: base.doctor || "Not detected",
+      date: base.date || '',
       verificationStatus: base.verificationStatus || "Pending Review",
       medicines: (base.medications || base.medicines || []).map(m => {
         const validated = validateMedicine(m.name || m.rawName);
         return {
           ...m,
-          name: m.name || m.rawName,
-          dosage: m.dosage || '500mg',
-          matchedName: validated.matchedName || m.name,
-          confidence: m.confidence || validated.confidence || 'high',
-          status: m.status || (m.confidence === 'high' ? 'Verified' : 'Pending Review'),
+          name: m.name || m.rawName || '',
+          dosage: m.dosage || '',
+          frequency: m.frequency || '',
+          duration: m.duration || '',
+          instructions: m.instructions || '',
+          matchedName: validated.matchedName || '',
+          confidence: m.confidence || 'low',
+          status: m.status || 'Needs Review',
           candidateMatches: m.candidateMatches || validated.candidateMatches || [],
           lookAlikeWarning: validated.lookAlikeWarning,
-          sourceSnippet: m.sourceSnippet || `Rx Line: "${m.name} ${m.dosage || ''} ${m.frequency || ''}"`
+          sourceSnippet: m.sourceSnippet || ''
         };
       }),
       testValues: (base.biomarkers || base.testValues || []).map(b => ({
         ...b,
         testName: b.name || b.testName,
         observedValue: b.value || b.observedValue,
-        confidence: b.confidence || 'high',
-        status: b.status || 'Verified',
-        sourceSnippet: b.sourceSnippet || `Report line: "${b.name || b.testName} ... ${b.value || b.observedValue} ${b.unit || ''} (Ref: ${b.referenceRange || '< normal'})"`
+        confidence: b.confidence || 'low',
+        status: b.status || 'Needs Review',
+        sourceSnippet: b.sourceSnippet || ''
       }))
     };
   });
@@ -118,6 +65,7 @@ export default function VerifyScreen({
   const [activeSnippet, setActiveSnippet] = useState(null);
   const [overallStatus, setOverallStatus] = useState('Pending Review');
   const [saveToast, setSaveToast] = useState(false);
+  const [confirmError, setConfirmError] = useState('');
 
   const handleSelectCandidate = (index, candidateName) => {
     setData(prev => {
@@ -126,11 +74,34 @@ export default function VerifyScreen({
         ...updated[index],
         name: candidateName,
         matchedName: candidateName,
-        confidence: 'high',
-        status: 'Verified'
+        status: 'Needs Review'
       };
       return { ...prev, medicines: updated };
     });
+  };
+
+  const handleUpdateMedicineField = (index, field, value) => {
+    setData(prev => {
+      const updated = [...prev.medicines];
+      updated[index] = { ...updated[index], [field]: value };
+      return { ...prev, medicines: updated };
+    });
+  };
+
+  const handleAddMedicine = () => {
+    setData(prev => ({
+      ...prev,
+      medicines: [...prev.medicines, {
+        name: '',
+        dosage: '',
+        frequency: '',
+        duration: '',
+        instructions: '',
+        confidence: 'low',
+        status: 'Needs Review',
+        sourceSnippet: 'Manual review entry'
+      }]
+    }));
   };
 
   const handleUpdateMedicineName = (index, newName) => {
@@ -158,6 +129,11 @@ export default function VerifyScreen({
   };
 
   const handleConfirm = () => {
+    if (data.medicines.some(medicine => !medicine.name.trim())) {
+      setConfirmError('Enter a medicine name for every row, or remove the blank row before saving.');
+      return;
+    }
+    setConfirmError('');
     const confirmedRecord = {
       ...data,
       verificationStatus: overallStatus,
@@ -202,6 +178,7 @@ export default function VerifyScreen({
             <p className="text-xs text-slate-500">
               Check, correct, and confirm extracted fields against the original document evidence before saving
             </p>
+            {data.sourceFilename && <p className="text-[11px] font-medium text-emerald-800 mt-1">File: {data.sourceFilename}</p>}
           </div>
         </div>
 
@@ -215,6 +192,7 @@ export default function VerifyScreen({
               className="font-bold text-slate-800 bg-transparent focus:outline-hidden cursor-pointer"
             >
               <option value="Pending Review">Pending Review</option>
+              <option value="Needs Review">Needs Review</option>
               <option value="Verified">Verified</option>
               <option value="Needs Correction">Needs Correction</option>
             </select>
@@ -245,6 +223,11 @@ export default function VerifyScreen({
           <button onClick={() => setSaveToast(false)} className="text-white font-bold ml-2">✕</button>
         </div>
       )}
+      {confirmError && (
+        <div role="alert" className="border-b border-rose-200 bg-rose-50 px-4 py-2 text-xs text-rose-800">
+          {confirmError}
+        </div>
+      )}
 
       {/* Side-by-Side Verification Body */}
       <div className="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-slate-200">
@@ -265,11 +248,16 @@ export default function VerifyScreen({
             <div className="text-[11px] text-slate-500 pb-2 border-b border-slate-100">
               <span className="font-semibold text-slate-700">Document:</span> {data.title}
               <br />
-              <span className="font-semibold text-slate-700">Doctor:</span> {data.doctor} • {data.date}
+              <span className="font-semibold text-slate-700">Doctor:</span> {data.doctor} • {data.date || 'Not detected'}
             </div>
 
             <div className="space-y-1.5 pt-1">
               <p className="text-[11px] font-bold text-slate-700">Click a snippet to inspect:</p>
+              {data.rawText && (
+                <pre className="max-h-36 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-slate-200 bg-white p-2 text-[11px] text-slate-600">
+                  {data.rawText}
+                </pre>
+              )}
               {data.medicines.map((m, idx) => (
                 <div
                   key={idx}
@@ -310,7 +298,7 @@ export default function VerifyScreen({
           )}
 
           <div className="text-[11px] text-slate-500 bg-white p-3 rounded-xl border border-slate-200">
-            <strong>Human Verification Principle:</strong> Medical AI must never guess unreadable characters. If a medicine or dose is ambiguous, review the original snippet and correct it manually.
+            <strong>Human Verification Principle:</strong> Local OCR and text matching can misread handwriting. No external AI recognition API is configured. Verify uncertain medicine names and doses with a qualified healthcare professional before saving.
           </div>
         </div>
 
@@ -324,8 +312,19 @@ export default function VerifyScreen({
                 <Pill className="w-4 h-4 text-emerald-600" />
                 Prescribed Medications ({data.medicines.length})
               </h3>
-              <span className="text-[11px] text-slate-500">Edit fields directly to correct errors</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-slate-500">Edit fields directly to correct errors</span>
+                <button type="button" onClick={handleAddMedicine} className="text-[11px] font-semibold text-emerald-800 hover:text-emerald-950 underline">
+                  Add medicine
+                </button>
+              </div>
             </div>
+
+            {data.medicines.length === 0 && (
+              <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                No medicine entries were recognized confidently. No medicine has been filled in for you. Check the OCR text and enter or verify prescription details manually with a healthcare professional.
+              </div>
+            )}
 
             <div className="space-y-3">
               {data.medicines.map((med, idx) => (
@@ -380,13 +379,44 @@ export default function VerifyScreen({
 
                     <div>
                       <label className="text-[11px] font-semibold text-slate-600 block mb-1">
-                        Dosage & Schedule
+                        Strength / dosage
                       </label>
                       <input
                         type="text"
-                        value={`${med.dosage || ''} • ${med.frequency || ''}`}
-                        readOnly
-                        className="w-full text-xs text-slate-600 bg-slate-100 border border-slate-200 rounded-lg px-2.5 py-1.5 cursor-not-allowed"
+                        value={med.dosage}
+                        onChange={(e) => handleUpdateMedicineField(idx, 'dosage', e.target.value)}
+                        placeholder="Not detected"
+                        className="w-full text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 focus:bg-white focus:border-emerald-500 focus:outline-hidden"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-600 block mb-1">Frequency</label>
+                      <input
+                        type="text"
+                        value={med.frequency}
+                        onChange={(e) => handleUpdateMedicineField(idx, 'frequency', e.target.value)}
+                        placeholder="Not detected"
+                        className="w-full text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 focus:bg-white focus:border-emerald-500 focus:outline-hidden"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-600 block mb-1">Duration</label>
+                      <input
+                        type="text"
+                        value={med.duration}
+                        onChange={(e) => handleUpdateMedicineField(idx, 'duration', e.target.value)}
+                        placeholder="Not detected"
+                        className="w-full text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 focus:bg-white focus:border-emerald-500 focus:outline-hidden"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-600 block mb-1">Instructions</label>
+                      <input
+                        type="text"
+                        value={med.instructions}
+                        onChange={(e) => handleUpdateMedicineField(idx, 'instructions', e.target.value)}
+                        placeholder="Not detected"
+                        className="w-full text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 focus:bg-white focus:border-emerald-500 focus:outline-hidden"
                       />
                     </div>
                   </div>

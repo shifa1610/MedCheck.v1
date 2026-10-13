@@ -4,40 +4,34 @@ import {
   Send, 
   User, 
   Bot, 
-  HeartPulse, 
-  RefreshCw, 
   Lightbulb, 
   ShieldAlert,
-  ArrowRight
+  AlertCircle
 } from 'lucide-react';
-import { askCopilot } from '../services/aiService';
+import { sendChatMessages } from '../services/chatService';
 import { TRANSLATIONS } from '../data/translations';
 
-export default function CopilotChat({ records, patient, language }) {
+const WELCOME_MESSAGES = {
+  en: 'Hello! I am the MedCheck AI Health Copilot. I can share general health information and help you prepare questions for a healthcare professional.',
+  hi: 'नमस्ते! मैं मेडचेक AI स्वास्थ्य सहायक हूँ। मैं सामान्य स्वास्थ्य जानकारी दे सकता हूँ और स्वास्थ्य पेशेवर से पूछने के लिए सवाल तैयार करने में मदद कर सकता हूँ।',
+  te: 'నమస్కారం! నేను మెడ్‌చెక్ AI ఆరోగ్య సహాయకుడిని. సాధారణ ఆరోగ్య సమాచారాన్ని అందించి, ఆరోగ్య నిపుణులను అడగాల్సిన ప్రశ్నలను సిద్ధం చేయడంలో సహాయపడగలను.',
+  ta: 'வணக்கம்! நான் மெட்செக் AI சுகாதார உதவியாளர். பொதுவான சுகாதாரத் தகவல்களைப் பகிர்ந்து, சுகாதார நிபுணரிடம் கேட்க வேண்டிய கேள்விகளைத் தயாரிக்க உதவுவேன்.',
+  kn: 'ನಮಸ್ಕಾರ! ನಾನು ಮೆಡ್‌ಚೆಕ್ AI ಆರೋಗ್ಯ ಸಹಾಯಕ. ಸಾಮಾನ್ಯ ಆರೋಗ್ಯ ಮಾಹಿತಿಯನ್ನು ಹಂಚಿಕೊಂಡು, ಆರೋಗ್ಯ ತಜ್ಞರನ್ನು ಕೇಳಲು ಪ್ರಶ್ನೆಗಳನ್ನು ಸಿದ್ಧಪಡಿಸಲು ಸಹಾಯ ಮಾಡುತ್ತೇನೆ.',
+  ml: 'നമസ്കാരം! ഞാൻ മെഡ്‌ചെക്ക് AI ആരോഗ്യ സഹായി. പൊതുവായ ആരോഗ്യ വിവരങ്ങൾ പങ്കുവെക്കാനും ആരോഗ്യ വിദഗ്ധരോട് ചോദിക്കാനുള്ള ചോദ്യങ്ങൾ തയ്യാറാക്കാനും സഹായിക്കും.',
+  mr: 'नमस्कार! मी मेडचेक AI आरोग्य सहाय्यक आहे. मी सामान्य आरोग्यविषयक माहिती देऊ शकतो आणि आरोग्यतज्ज्ञांना विचारण्यासाठी प्रश्न तयार करण्यात मदत करू शकतो.',
+  gu: 'નમસ્તે! હું મેડચેક AI આરોગ્ય સહાયક છું. હું સામાન્ય આરોગ્ય માહિતી આપી શકું છું અને આરોગ્ય નિષ્ણાતને પૂછવા માટેના પ્રશ્નો તૈયાર કરવામાં મદદ કરી શકું છું.'
+};
+
+export default function CopilotChat({ language }) {
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
 
-  const [messages, setMessages] = useState([
-    {
-      sender: 'assistant',
-      text: language === 'hi' 
-        ? `नमस्ते ${patient?.name || ''}! मैं आपका मेडचेक (MedCheck) AI स्वास्थ्य साथी हूँ। मैंने आपके हालिया मेडिकल रिकॉर्ड्स, पर्चों और लैब टेस्ट का अध्ययन कर लिया है। आप अपनी सेहत, दवाओं के अंतर, या डॉक्टर से पूछे जाने वाले सवालों के बारे में कोई भी सवाल पूछ सकते हैं!`
-        : language === 'te'
-          ? `నమస్కారం ${patient?.name || ''} గారు! నేను మీ మెడ్‌చెక్ (MedCheck) AI హెల్త్ కోపైలట్‌ని. మీ ఇటీవలి ల్యాబ్ పరీక్షలు మరియు మందుల వివరాలను నేను పరిశీలించాను. మీ ఆరోగ్యం గురించి ఏదైనా అడగవచ్చు!`
-          : language === 'ta'
-            ? `வணக்கம் ${patient?.name || ''}! நான் உங்கள் மெட்செக் (MedCheck) AI சுகாதார வழிகாட்டி. உங்கள் சமீபத்திய ஆய்வக அறிக்கைகள் மற்றும் மருந்துச் சீட்டுகளை நான் பகுப்பாய்வு செய்துள்ளேன். உங்கள் உடல்நலம் குறித்து எது வேண்டுமானாலும் கேளுங்கள்!`
-            : language === 'kn'
-              ? `ನಮಸ್ಕಾರ ${patient?.name || ''}! ನಾನು ನಿಮ್ಮ ಮೆಡ್‌ಚೆಕ್ (MedCheck) AI ಆರೋಗ್ಯ ಸಹಾಯಕ. ನಿಮ್ಮ ಇತ್ತೀಚಿನ ವೈದ್ಯಕೀಯ ವರದಿಗಳು, ಪ್ರಿಸ್ಕ್ರಿಪ್ಷನ್‌ಗಳು ಮತ್ತು ಲ್ಯಾಬ್ ಪರೀಕ್ಷೆಗಳನ್ನು ನಾನು ಪರಿಶೀಲಿಸಿದ್ದೇನೆ. ನಿಮ್ಮ ಆರೋಗ್ಯ ಅಥವಾ ಔಷಧಿಗಳ ಬಗ್ಗೆ ಯಾವುದೇ ಪ್ರಶ್ನೆಗಳನ್ನು ಕೇಳಬಹುದು!`
-              : language === 'ml'
-                ? `നമസ്കാരം ${patient?.name || ''}! ഞാൻ നിങ്ങളുടെ മെഡ്ചെക്ക് (MedCheck) AI ആരോഗ്യ സഹായിയാണ്. നിങ്ങളുടെ ഏറ്റവും പുതിയ മെഡിക്കൽ റിപ്പോർട്ടുകളും കുറിപ്പടികളും ഞാൻ വിശകലനം ചെയ്തിട്ടുണ്ട്. നിങ്ങളുടെ ആരോഗ്യത്തെക്കുറിച്ചുള്ള എന്തും ചോദിക്കാം!`
-                : language === 'mr'
-                  ? `नमस्कार ${patient?.name || ''}! मी आपला मेडचेक (MedCheck) AI आरोग्य साथीदार आहे. मी आपले नुकतेच वैद्यकीय रेकॉर्ड्स, औषधांच्या चिठ्ठ्या आणि लॅब चाचण्या तपासल्या आहेत. आपण आपल्या तब्येतीबद्दल किंवा औषधांबद्दल कोणताही प्रश्न विचारू शकता!`
-                  : language === 'gu'
-                    ? `નમસ્તે ${patient?.name || ''}! હું તમારો મેડચેક (MedCheck) AI હેલ્થ સાથી છું. મેં તમારા તાજેતરના મેડિકલ રિપોર્ટ્સ, પ્રિસ્ક્રિપ્શન્સ અને લેબ ટેસ્ટનો અભ્યાસ કર્યો છે. તમે તમારા સ્વાસ્થ્ય અથવા દવાઓ અંગે કોઈપણ પ્રશ્ન પૂછી શકો છો!`
-                    : `Hello ${patient?.name || 'there'}! I am your MedCheck AI Health Copilot. I have analyzed your complete health timeline, active medications, and recent lab panels. How can I assist you or your family with your health today?`
-    }
-  ]);
+  const [messages, setMessages] = useState(() => [{
+    sender: 'assistant',
+    text: WELCOME_MESSAGES[language] || WELCOME_MESSAGES.en
+  }]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [error, setError] = useState('');
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -49,29 +43,38 @@ export default function CopilotChat({ records, patient, language }) {
   }, [messages, isTyping]);
 
   const handleSend = async (textToSend) => {
-    const query = textToSend || inputText;
-    if (!query.trim()) return;
+    const query = (typeof textToSend === 'string' ? textToSend : inputText).trim();
+    if (!query || isTyping) return;
 
     const userMessage = { sender: 'user', text: query };
     setMessages(prev => [...prev, userMessage]);
-    if (!textToSend) setInputText('');
+    setInputText('');
+    setError('');
     setIsTyping(true);
 
     try {
-      const response = await askCopilot(query, records, patient, language);
+      const history = [...messages, userMessage];
+      const requestMessages = [];
+      let totalLength = 0;
+      for (const message of history.slice(-20).reverse()) {
+        if (message.text.length + totalLength > 12000) break;
+        requestMessages.push({
+          role: message.sender === 'user' ? 'user' : 'assistant',
+          content: message.text
+        });
+        totalLength += message.text.length;
+      }
+      const response = await sendChatMessages(requestMessages.reverse(), language);
       setMessages(prev => [...prev, { sender: 'assistant', text: response }]);
-    } catch (err) {
-      setMessages(prev => [...prev, { 
-        sender: 'assistant', 
-        text: 'I apologize, but I encountered a momentary connection issue. Please feel free to try again.' 
-      }]);
+    } catch (sendError) {
+      setError(sendError.message || 'The chat request failed. Please try again.');
     } finally {
       setIsTyping(false);
     }
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col h-[750px] overflow-hidden">
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col h-[min(720px,calc(100dvh-10rem))] min-h-[360px] overflow-hidden">
       {/* Header */}
       <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
         <div className="flex items-center gap-3">
@@ -82,17 +85,13 @@ export default function CopilotChat({ records, patient, language }) {
             <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
               {t.copilot.title}
               <span className="bg-teal-100 text-teal-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                Context-Aware
+                OpenAI
               </span>
             </h2>
-            <p className="text-xs text-slate-500">
-              {t.copilot.subtitle}
-            </p>
+              <p className="text-xs text-slate-500">
+                General health information, not a diagnosis
+              </p>
           </div>
-        </div>
-
-        <div className="text-xs text-slate-500 hidden sm:block">
-          Records in memory: <span className="font-semibold text-slate-800">{records.length} files</span>
         </div>
       </div>
 
@@ -111,6 +110,7 @@ export default function CopilotChat({ records, patient, language }) {
           <button
             key={idx}
             onClick={() => handleSend(prompt)}
+            disabled={isTyping}
             className="text-xs bg-white hover:bg-teal-50 text-slate-700 hover:text-teal-800 border border-slate-200 hover:border-teal-200 px-3 py-1 rounded-full whitespace-nowrap transition-colors shadow-2xs font-medium"
           >
             {prompt}
@@ -119,7 +119,7 @@ export default function CopilotChat({ records, patient, language }) {
       </div>
 
       {/* Messages Scroll Area */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4" aria-live="polite">
         {messages.map((msg, idx) => {
           const isUser = msg.sender === 'user';
           return (
@@ -147,14 +147,21 @@ export default function CopilotChat({ records, patient, language }) {
         })}
 
         {isTyping && (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3" role="status" aria-label="Assistant is typing">
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-teal-500 to-sky-600 text-white flex items-center justify-center shadow-xs">
               <Bot className="w-4 h-4" />
             </div>
-            <div className="bg-slate-100 rounded-2xl rounded-tl-xs p-3.5 border border-slate-200 flex items-center gap-2 text-xs text-slate-500">
-              <RefreshCw className="w-3.5 h-3.5 animate-spin text-teal-600" />
-              <span>MedCheck Copilot is reviewing your records...</span>
+            <div className="bg-slate-100 rounded-2xl rounded-tl-xs p-3.5 border border-slate-200 flex items-center gap-1.5">
+              {[0, 1, 2].map(dot => (
+                <span key={dot} className="h-2 w-2 rounded-full bg-teal-600 animate-bounce" style={{ animationDelay: `${dot * 150}ms` }} />
+              ))}
             </div>
+          </div>
+        )}
+        {error && (
+          <div role="alert" className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{error}</span>
           </div>
         )}
         <div ref={messagesEndRef} />
@@ -162,6 +169,9 @@ export default function CopilotChat({ records, patient, language }) {
 
       {/* Input Box */}
       <div className="p-4 border-t border-slate-200 bg-white">
+        <p className="mb-3 text-center text-[10px] text-slate-500">
+          Chat text is sent to OpenAI. Your patient records are not shared with the chat assistant.
+        </p>
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -174,6 +184,8 @@ export default function CopilotChat({ records, patient, language }) {
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             placeholder={t.copilot.placeholder}
+            maxLength={4000}
+            aria-label="Message the health copilot"
             className="flex-1 bg-slate-50 border border-slate-200 text-xs px-4 py-2.5 rounded-xl focus:bg-white focus:outline-hidden focus:border-teal-500 transition-all"
           />
           <button
@@ -188,7 +200,7 @@ export default function CopilotChat({ records, patient, language }) {
 
         <div className="mt-2 text-center text-[10px] text-slate-400 flex items-center justify-center gap-1">
           <ShieldAlert className="w-3 h-3 text-amber-500" />
-          <span>Informational health companion. Always consult your doctor before modifying medication doses.</span>
+          <span>For information only. Do not use this chat to diagnose or change medication; consult a qualified healthcare professional.</span>
         </div>
       </div>
     </div>

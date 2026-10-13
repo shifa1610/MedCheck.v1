@@ -21,11 +21,13 @@ import {
 import { PRELOADED_COMPARISONS, FAMILY_MEMBERS } from '../data/mockRecords';
 import { TRANSLATIONS } from '../data/translations';
 import VoicePlayer from './VoicePlayer';
+import { findPrescriptionDifferences } from '../services/prescriptionReview';
 
 export default function MedicineConflictDetector({ 
   currentFamilyKey = 'papa', 
   records = [], 
-  language = 'en' 
+  language = 'en',
+  isDemo = true
 }) {
   const [selectedComparisonId, setSelectedComparisonId] = useState(PRELOADED_COMPARISONS[0].id);
   const [copiedWhatsApp, setCopiedWhatsApp] = useState(false);
@@ -33,6 +35,59 @@ export default function MedicineConflictDetector({
 
   const activeComparison = PRELOADED_COMPARISONS.find(c => c.id === selectedComparisonId) || PRELOADED_COMPARISONS[0];
   const activeMember = FAMILY_MEMBERS[currentFamilyKey] || FAMILY_MEMBERS.papa;
+  const prescriptionDifferences = findPrescriptionDifferences(records);
+
+  if (!isDemo) {
+    return (
+      <div className="space-y-5">
+        <section className="rounded-3xl border border-amber-200 bg-amber-50/70 p-5 sm:p-6">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-6 w-6 shrink-0 text-amber-700" />
+            <div>
+              <h1 className="text-lg font-bold text-slate-900">Prescription comparison</h1>
+              <p className="mt-1 text-sm text-slate-700">
+                Compares only medicines present in multiple saved prescriptions. Differences are flagged for a clinician or pharmacist to verify; this is not an interaction checker and does not tell you which prescription to follow.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {prescriptionDifferences.length ? (
+          <div className="space-y-3">
+            {prescriptionDifferences.map((difference, index) => (
+              <article key={`${difference.medicine}-${difference.field}-${index}`} className="rounded-2xl border border-rose-200 bg-white p-4 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h2 className="font-bold text-slate-900">{difference.medicine}</h2>
+                  <span className="rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-800">
+                    Verify {difference.label.toLowerCase()}
+                  </span>
+                </div>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl bg-emerald-50 p-3">
+                    <div className="text-[11px] font-semibold text-emerald-800">More recent document · {difference.recentDocument}</div>
+                    <div className="mt-1 text-sm font-bold text-slate-900">{difference.recentValue}</div>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 p-3">
+                    <div className="text-[11px] font-semibold text-slate-600">Earlier document · {difference.previousDocument}</div>
+                    <div className="mt-1 text-sm font-bold text-slate-900">{difference.previousValue}</div>
+                  </div>
+                </div>
+                <p className="mt-3 text-xs text-slate-700">Ask the prescriber which instruction is current. Do not change or stop a medicine based on this comparison.</p>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-700">
+            {records.filter(record => record.type === 'prescription' && record.medications?.length).length < 2
+              ? 'Save at least two prescriptions containing recognized medicine details to compare them. No difference can be assessed from one prescription.'
+              : 'No explicit differences were found for medicines listed in more than one prescription. This does not confirm the prescriptions are safe or equivalent.'}
+          </div>
+        )}
+
+        <p className="text-[11px] text-slate-500">Only explicit saved fields are compared. Unreadable, missing, or differently spelled medicine names may not match automatically.</p>
+      </div>
+    );
+  }
 
   // Language text selector
   const conflictSummaryText = activeComparison.conflictSummary[language] || activeComparison.conflictSummary.en;

@@ -1,13 +1,15 @@
 import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
+import { randomUUID } from 'crypto';
 import dotenv from 'dotenv';
 import { handleTTS } from '../api/tts.js';
 import { connectDatabase, getDatabaseStatus } from './database.js';
 import authRoutes from './routes/auth.js';
+import profileRoutes from './routes/profiles.js';
 import recordRoutes from './routes/records.js';
+import handwritingRoutes from './routes/handwriting.js';
+import chatRoutes from './routes/chat.js';
 
 dotenv.config();
 
@@ -15,25 +17,26 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors());
+app.use('/api/chat', express.json({ limit: '64kb' }));
 app.use(express.json({ limit: '25mb' }));
 app.use('/api/auth', authRoutes);
+app.use('/api/profiles', profileRoutes);
 app.use('/api/records', recordRoutes);
+app.use('/api/recognition', handwritingRoutes);
+app.use('/api/chat', chatRoutes);
 
-// Ensure uploads folder exists
-const uploadDir = path.join(process.cwd(), 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + '-' + file.originalname);
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.mimetype)) {
+      return cb(null, true);
+    }
+    const error = new Error('Only PDF, JPEG, PNG, and WebP documents are accepted.');
+    error.statusCode = 400;
+    return cb(error);
   }
 });
-
-const upload = multer({ storage });
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -50,26 +53,22 @@ app.get('/api/health', (req, res) => {
 // Multi-lingual Audio TTS Proxy Endpoint (Supports Google Cloud TTS, Azure AI Speech & Native High-Fidelity Gateway)
 app.all('/api/tts', handleTTS);
 
-// Upload and Extract endpoint
+// Intake only. Browser-side Tesseract OCR processes the selected image itself.
 app.post('/api/upload', upload.single('medicalRecord'), (req, res) => {
-  try {
-    const file = req.file;
-    if (!file) {
-      return res.status(400).json({ error: 'No file uploaded' });
-    }
-
-    // Return receipt
-    res.json({
-      success: true,
-      filename: file.filename,
-      originalName: file.originalname,
-      size: file.size,
-      mimetype: file.mimetype,
-      message: 'File ingested successfully into clinical OCR pipeline'
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  const file = req.file;
+  if (!file) {
+    return res.status(400).json({ error: 'No file uploaded.' });
   }
+
+  return res.json({
+    success: true,
+    scanId: randomUUID(),
+    originalName: file.originalname,
+    size: file.size,
+    mimetype: file.mimetype,
+    recognition: 'not_performed',
+    message: 'Upload received in memory only. Recognition is performed by the client OCR workflow.'
+  });
 });
 
 // FHIR R4 Validation Endpoint
@@ -104,8 +103,15 @@ const server = app.listen(PORT, () => {
 });
 
 app.use((error, req, res, next) => {
-  console.error('[MedCheck] API error:', error);
   if (res.headersSent) return next(error);
+  if (error instanceof multer.MulterError) {
+    const status = error.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
+    return res.status(status).json({ error: status === 413 ? 'File exceeds the 15 MB upload limit.' : 'Invalid upload request.' });
+  }
+  if (error.statusCode === 400) {
+    return res.status(400).json({ error: error.message });
+  }
+  console.error('[MedCheck] API error:', error.message);
   return res.status(500).json({ error: 'An unexpected server error occurred.' });
 });
 

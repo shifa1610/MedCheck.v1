@@ -1,36 +1,103 @@
 /**
- * MedCheck AI Clinical Intelligence & OCR Extraction Engine
- * Supports Multimodal Vision extraction + Built-in Clinical NLP Heuristic Engine
+ * MedCheck clinical helper functions and local OCR-text extraction.
  */
+import { findPrescriptionDifferences, getPrescriptionReviewFacts } from './prescriptionReview.js';
 
-// Common medication database for clinical entity recognition
-const DRUG_DATABASE = [
-  { name: "Metformin HCl", synonyms: ["metformin", "glycomet", "glucophage"], defaultDosage: "500 mg", timing: "After Meals", purpose: "Blood sugar regulation in Type 2 Diabetes" },
-  { name: "Telmisartan", synonyms: ["telmisartan", "telma", "micardis"], defaultDosage: "40 mg", timing: "Morning after breakfast", purpose: "Hypertension (Blood Pressure) & renal protection" },
-  { name: "Atorvastatin", synonyms: ["atorvastatin", "atorva", "lipitor"], defaultDosage: "20 mg", timing: "Bedtime (at night)", purpose: "Cholesterol reduction & plaque stabilization" },
-  { name: "Amlodipine", synonyms: ["amlodipine", "stamlo", "norvasc"], defaultDosage: "5 mg", timing: "Morning", purpose: "Blood pressure reduction" },
-  { name: "Pantoprazole", synonyms: ["pantoprazole", "pan 40", "pantocid"], defaultDosage: "40 mg", timing: "30 mins before breakfast", purpose: "Acid reflux and stomach protection" },
-  { name: "Paracetamol", synonyms: ["paracetamol", "crocin", "calpol", "dolo 650"], defaultDosage: "650 mg", timing: "As needed (SOS)", purpose: "Fever and mild to moderate pain" },
-  { name: "Aspirin (Ecosprin)", synonyms: ["aspirin", "ecosprin", "disprin"], defaultDosage: "75 mg", timing: "After lunch", purpose: "Antiplatelet blood thinner for cardiovascular protection" }
-];
+const MEDICINE_FORM = /^(?:tab(?:let)?|cap(?:sule)?|syp(?:rup)?|inj(?:ection)?|drop|cream)\.?\s+/i;
+const MEDICINE_STRENGTH = /\b\d+(?:\.\d+)?\s?(?:mg|mcg|µg|g|ml|iu|units?)\b/i;
+const MEDICINE_FREQUENCY = /\b\d+\s*[-/]\s*\d+\s*[-/]\s*\d+\b|\b(?:once|twice|three times|four times)\s+(?:(?:a|per)\s+)?daily\b|\b(?:once|twice|three times|four times)\s+(?:a|per)\s+day\b|\b(?:OD|BD|BID|TDS|TID|QID|QHS|SOS|PRN)\b/i;
+const MEDICINE_DURATION = /\b(?:for|x)\s*\d+\s*(?:days?|weeks?|months?)\b/i;
+const LAB_TERMS = /\b(?:hba1c|glucose|sugar|cholesterol|creatinine|hemoglobin|platelets?|wbc|rbc|test result)\b/i;
+const MEDICINE_INSTRUCTIONS = /\b(?:after|before|with|without)\s+(?:food|meals?|breakfast|lunch|dinner|bedtime)\b/i;
 
-// Lab test reference ranges
-const LAB_REFERENCE_DATABASE = {
-  hba1c: { name: "HbA1c (Glycated Hemoglobin)", normalMin: 4.0, normalMax: 5.7, unit: "%", highMeaning: "Average blood sugar over past 3 months has been elevated; indicates diabetes or poor control." },
-  glucose_fasting: { name: "Fasting Blood Sugar", normalMin: 70, normalMax: 100, unit: "mg/dL", highMeaning: "Liver is releasing too much glucose overnight or insulin response is insufficient." },
-  cholesterol_total: { name: "Total Cholesterol", normalMin: 120, normalMax: 200, unit: "mg/dL", highMeaning: "Total circulating cholesterol is high, increasing potential risk of arterial plaque buildup." },
-  cholesterol_ldl: { name: "LDL 'Bad' Cholesterol", normalMin: 50, normalMax: 100, unit: "mg/dL", highMeaning: "Major contributor to atherosclerosis and cardiovascular narrowing." },
-  cholesterol_hdl: { name: "HDL 'Good' Cholesterol", normalMin: 40, normalMax: 80, unit: "mg/dL", lowMeaning: "Low levels reduce the body's natural scavenging of excess cholesterol." },
-  triglycerides: { name: "Triglycerides", normalMin: 50, normalMax: 150, unit: "mg/dL", highMeaning: "Excess fat calories stored in bloodstream, linked to insulin resistance." },
-  creatinine: { name: "Serum Creatinine", normalMin: 0.7, normalMax: 1.3, unit: "mg/dL", highMeaning: "Kidney filtration rate may be compromised; requires clinical monitoring." },
-  hemoglobin: { name: "Hemoglobin", normalMin: 13.0, normalMax: 17.0, unit: "g/dL", lowMeaning: "Reduced red blood cell oxygen-carrying capacity (anemia); can cause fatigue." }
-};
+function extractMedicationLines(rawText, ocrConfidence) {
+  const lines = rawText
+    .split(/\r?\n/)
+    .flatMap(line => line.split(/(?=\b(?:tab(?:let)?|cap(?:sule)?|syp(?:rup)?|inj(?:ection)?)\.?\s+)/i))
+    .map(line => line.trim().replace(/^(?:prescription|rx)\s*[:.-]\s*/i, '').trim())
+    .filter(Boolean);
+
+  return lines.flatMap(line => {
+    const formMatch = line.match(MEDICINE_FORM);
+    if (!formMatch && LAB_TERMS.test(line)) return [];
+    const strengthMatch = line.match(MEDICINE_STRENGTH);
+    const frequencyMatch = line.match(MEDICINE_FREQUENCY);
+    if (!formMatch && (!strengthMatch || !frequencyMatch)) return [];
+
+    const content = formMatch ? line.slice(formMatch[0].length) : line;
+    const strength = content.match(MEDICINE_STRENGTH);
+    const frequency = content.match(MEDICINE_FREQUENCY);
+    const duration = content.match(MEDICINE_DURATION);
+    const instructions = content.match(MEDICINE_INSTRUCTIONS);
+    const possibleEndIndexes = [strength?.index, frequency?.index, duration?.index, instructions?.index]
+      .filter(index => index !== undefined);
+    const nameEnd = possibleEndIndexes.length ? Math.min(...possibleEndIndexes) : content.length;
+    const name = content.slice(0, nameEnd).replace(/^[\s\d.)-]+|[\s,:;-]+$/g, '').trim();
+    if (name.length < 2) return [];
+
+    return [{
+      name,
+      rawName: name,
+      dosage: strength?.[0]?.trim() || '',
+      frequency: frequency?.[0]?.trim() || '',
+      duration: duration?.[0]?.replace(/^(?:for|x)\s*/i, '') || '',
+      instructions: instructions?.[0]?.trim() || '',
+      confidence: ocrConfidence >= 80 && strength && frequency ? 'medium' : 'low',
+      status: 'Needs Review',
+      sourceSnippet: line
+    }];
+  });
+}
 
 /**
- * Intelligent Document Extraction
- * Accepts file/image or raw text input and returns structured clinical fields
+ * Parses OCR text locally. This is not an AI vision service; unknown or
+ * incomplete readings are left for a person to review rather than guessed.
  */
-export async function extractMedicalRecord(input, apiKey = null) {
+export async function extractMedicalRecord(input, metadata = {}) {
+  const rawText = typeof input === 'string'
+    ? input
+    : typeof input?.text === 'string'
+      ? input.text
+      : '';
+  const text = rawText.trim();
+  const isPrescription = /\b(?:tabs?|tablets?|caps?|capsules?|syrups?|inj(?:ection)?s?|rx|prescriptions?)\b/i.test(text);
+  const isDischarge = /\b(?:discharge|admitted|surgery|hospital)\b/i.test(text);
+  const type = isDischarge ? 'discharge' : isPrescription ? 'prescription' : 'lab';
+  const ocrConfidence = Number.isFinite(metadata.ocrConfidence) ? metadata.ocrConfidence : 100;
+  const medications = extractMedicationLines(text, ocrConfidence);
+  const scanId = metadata.scanId || `REC-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
+
+  return {
+    id: scanId,
+    scanId,
+    sourceFilename: metadata.sourceFilename || '',
+    rawText: text,
+    extractionStatus: 'needs_review',
+    title: type === 'prescription' ? 'Prescription — extracted text' : type === 'discharge' ? 'Discharge summary — extracted text' : 'Medical document — extracted text',
+    type,
+    date: '',
+    facility: '',
+    doctor: '',
+    category: type === 'prescription' ? 'Prescription' : type === 'discharge' ? 'Discharge Summary' : 'Medical Document',
+    summary: {
+      plainText: medications.length
+        ? 'Text was extracted from this document. Verify every medicine field against the original prescription before saving.'
+        : 'Text was extracted, but no medicine entries could be identified reliably. Review the original document and confirm details with a healthcare professional.'
+    },
+    medications,
+    biomarkers: [],
+    abnormalExplanations: [],
+    diagnoses: [],
+    doctorQuestions: []
+  };
+}
+
+/**
+ * Keep any legacy internal call on the document-specific parser.
+ */
+async function legacyExtractMedicalRecord(input) {
+  return extractMedicalRecord(input);
+
   // Simulate natural AI thinking delay for realistic UX
   await new Promise(resolve => setTimeout(resolve, 1400));
 
@@ -198,6 +265,8 @@ export async function askCopilot(question, records, patient, language = "en") {
   await new Promise(res => setTimeout(res, 850));
 
   const q = question.toLowerCase();
+  const prescriptionFacts = getPrescriptionReviewFacts(records);
+  const hasScannedPrescription = records.some(record => record.scanId || record.sourceFilename);
 
   // Multi-lingual flags
   const isHindi = language === "hi";
@@ -207,6 +276,32 @@ export async function askCopilot(question, records, patient, language = "en") {
   const isMalayalam = language === "ml";
   const isMarathi = language === "mr";
   const isGujarati = language === "gu";
+
+  if (hasScannedPrescription) {
+    if (/diet|food|eat|meal|खाना|आहार|ఆహారం|உணவு|ಆಹಾರ|ഭക്ഷണം|ખોરાક/i.test(q)) {
+      const instructions = prescriptionFacts
+        .filter(medicine => medicine.instructions)
+        .map(medicine => `${medicine.name}: ${medicine.instructions} (source: ${medicine.sourceFilename})`);
+      return instructions.length
+        ? `The saved prescription text contains these food or timing directions:\n${instructions.join('\n')}\n\nThese are transcribed directions, not new advice. Ask the prescriber or pharmacist about any diet restrictions not written in the prescription.`
+        : 'I could not find food or timing instructions in the saved prescription text. MedCheck does not generate a personalized diet plan; please ask the prescriber or pharmacist.';
+    }
+
+    if (/conflict|compare|difference|dose|dosage|interaction|use|purpose|medicine|medication|prescription|side effect/i.test(q)) {
+      const differences = findPrescriptionDifferences(records);
+      const medicationLines = prescriptionFacts.map(medicine =>
+        `${medicine.name || 'Unclear medicine'}: dose ${medicine.dosage || 'not detected'}, frequency ${medicine.frequency || 'not detected'}, duration ${medicine.duration || 'not detected'}, source ${medicine.sourceFilename}${medicine.purpose ? `, purpose stated as ${medicine.purpose}` : ', purpose not stated in the prescription'}`
+      );
+      const differenceLines = differences.map(difference =>
+        `${difference.medicine} ${difference.label}: ${difference.recentValue} in ${difference.recentDocument} versus ${difference.previousValue} in ${difference.previousDocument}; ask the prescriber which is current.`
+      );
+      return [
+        medicationLines.length ? `From the saved prescription text:\n${medicationLines.join('\n')}` : 'No medicine details were saved from the scanned prescription.',
+        differenceLines.length ? `Differences to verify:\n${differenceLines.join('\n')}` : 'No explicit differences were found for medicines listed in more than one saved prescription.',
+        'This is a text comparison, not a drug-interaction checker or treatment recommendation. Do not change medicines without a qualified healthcare professional.'
+      ].join('\n\n');
+    }
+  }
 
   if (q.includes("hba1c") || q.includes("sugar") || q.includes("glucose") || q.includes("डायबिटीज़") || q.includes("షుగರ್") || q.includes("சர்க்கரை") || q.includes("ಸಕ್ಕರೆ") || q.includes("ഷുഗർ") || q.includes("साखर") || q.includes("સુગર")) {
     if (isHindi) {

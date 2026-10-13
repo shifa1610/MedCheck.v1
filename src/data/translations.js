@@ -105,10 +105,10 @@ export const TRANSLATIONS = {
     },
     copilot: {
       title: "MedCheck Health Copilot",
-      subtitle: "Ask questions about your prescriptions, lab tests, dietary advice, or doctor instructions",
-      placeholder: "Ask anything about your health records (e.g. 'Why is my HbA1c flagged high?')...",
-      quickPrompt1: "What do my latest lab test results mean?",
-      quickPrompt2: "Are there any food interactions with my medications?",
+      subtitle: "Ask general health questions and prepare for a clinician visit",
+      placeholder: "Ask a general health question...",
+      quickPrompt1: "How can I understand a lab test result?",
+      quickPrompt2: "What should I ask a pharmacist about food and medicines?",
       quickPrompt3: "Prepare a checklist for my doctor appointment tomorrow.",
       quickPrompt4: "Explain my diabetes medication routine in simple words.",
       send: "Send"

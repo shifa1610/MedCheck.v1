@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import mongoose from 'mongoose';
 import Record from '../models/Record.js';
+import PatientProfile from '../models/PatientProfile.js';
 import requireAuth from '../middleware/requireAuth.js';
 import { getDatabaseStatus } from '../database.js';
 
@@ -38,12 +39,24 @@ router.post('/', async (req, res, next) => {
   if (payload.medications !== undefined && !Array.isArray(payload.medications)) {
     return res.status(400).json({ error: 'medications must be an array.' });
   }
+  if (payload.patientProfileId && !mongoose.isValidObjectId(payload.patientProfileId)) {
+    return res.status(400).json({ error: 'Invalid patient profile id.' });
+  }
 
   try {
+    let patientName = payload.patientName.trim();
+    if (payload.patientProfileId) {
+      const profile = await PatientProfile.findOne({
+        _id: payload.patientProfileId,
+        userId: req.auth.sub
+      });
+      if (!profile) return res.status(404).json({ error: 'Patient profile not found.' });
+      patientName = profile.name;
+    }
     const record = await Record.create({
       ...payload,
       userId: req.auth.sub,
-      patientName: payload.patientName.trim()
+      patientName
     });
     return res.status(201).json({ record });
   } catch (error) {

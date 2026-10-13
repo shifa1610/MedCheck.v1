@@ -10,13 +10,80 @@ import {
   CheckCircle2, 
   Clock 
 } from 'lucide-react';
+import { findPrescriptionDifferences, getPrescriptionReviewFacts } from '../services/prescriptionReview';
 
-export default function VisitPrepBrief({ patient, records }) {
+export default function VisitPrepBrief({ patient, records, isDemo = true }) {
   const handlePrint = () => {
     window.print();
   };
 
   const latestLab = records.find(r => r.type === 'lab') || records[0];
+  const prescriptionFacts = getPrescriptionReviewFacts(records);
+  const prescriptionDifferences = findPrescriptionDifferences(records);
+  const hasScannedRecords = records.some(record => record.scanId && record.sourceFilename);
+
+  if (!isDemo || hasScannedRecords) {
+    const doctorQuestions = [
+      ...prescriptionDifferences.slice(0, 3).map(difference => ({
+        question: `For ${difference.medicine}, the ${difference.label.toLowerCase()} differs between ${difference.recentDocument} (${difference.recentValue}) and ${difference.previousDocument} (${difference.previousValue}). Which instruction should I follow?`
+      })),
+      ...prescriptionFacts
+        .filter(medicine => !medicine.dosage || !medicine.frequency || medicine.status === 'Needs Review')
+        .slice(0, 2)
+        .map(medicine => ({
+          question: `Please confirm the medicine name, dose, and schedule for ${medicine.name || 'this unclear medicine'} from ${medicine.sourceFilename}.`
+        }))
+    ];
+    if (prescriptionFacts.some(medicine => !medicine.instructions)) {
+      doctorQuestions.push({ question: 'Are there any food, drink, or timing instructions or restrictions for these medicines that are not clear from the prescription?' });
+    }
+    if (prescriptionFacts.some(medicine => !medicine.purpose)) {
+      doctorQuestions.push({ question: 'What is the intended purpose of each medicine listed in the prescription?' });
+    }
+    if (patient.allergies?.length) {
+      doctorQuestions.push({ question: `Please check these medicines against the recorded allergies: ${patient.allergies.join(', ')}.` });
+    }
+
+    return (
+      <div className="space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Prescription review brief</h2>
+            <p className="mt-1 text-xs text-slate-600">Based only on records saved for {patient.name}. No treatment changes are recommended.</p>
+          </div>
+          <button onClick={handlePrint} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white">
+            <Printer className="h-4 w-4" /> Print / Save as PDF
+          </button>
+        </div>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+          <h3 className="font-bold text-slate-900">Saved prescriptions and extracted medicines</h3>
+          {prescriptionFacts.length ? (
+            <div className="mt-3 space-y-2">
+              {prescriptionFacts.map((medicine, index) => (
+                <div key={`${medicine.sourceFilename}-${medicine.name}-${index}`} className="rounded-xl bg-slate-50 p-3 text-xs">
+                  <div className="font-semibold text-slate-900">{medicine.name || 'Medicine name needs review'} · {medicine.dosage || 'Dose not detected'} · {medicine.frequency || 'Frequency not detected'}</div>
+                  <div className="mt-1 text-slate-600">Source: {medicine.sourceFilename}{medicine.duration ? ` · Duration: ${medicine.duration}` : ''}{medicine.instructions ? ` · Instructions: ${medicine.instructions}` : ''}</div>
+                </div>
+              ))}
+            </div>
+          ) : <p className="mt-2 text-sm text-slate-600">No saved prescription medicines are available.</p>}
+        </section>
+
+        <section className="rounded-2xl border border-amber-200 bg-amber-50/70 p-5">
+          <h3 className="font-bold text-slate-900">Questions to confirm with the prescriber or pharmacist</h3>
+          {doctorQuestions.length ? (
+            <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-slate-800">
+              {doctorQuestions.map((item, index) => <li key={index}>{item.question}</li>)}
+            </ol>
+          ) : (
+            <p className="mt-2 text-sm text-slate-700">No explicit prescription differences or missing directions were found in the saved records. This does not confirm safety or that the list is complete.</p>
+          )}
+          <p className="mt-4 text-xs text-amber-900">Diet or food restrictions are shown only when present in the prescription text. MedCheck does not generate a personalized diet plan or perform a drug-interaction check.</p>
+        </section>
+      </div>
+    );
+  }
 
   const doctorQuestions = [
     {
@@ -79,10 +146,11 @@ export default function VisitPrepBrief({ patient, records }) {
               Patient Clinical Brief: {patient.name}
             </h1>
             <div className="text-xs text-slate-600 mt-1 flex flex-wrap gap-x-4">
-              <span><strong>Age/Sex:</strong> {patient.age}Y / {patient.gender}</span>
-              <span><strong>Blood Group:</strong> {patient.bloodGroup}</span>
-              <span><strong>ABHA ID:</strong> {patient.abhaId}</span>
-              <span className="text-rose-600 font-bold"><strong>Allergies:</strong> {patient.allergies.join(', ')}</span>
+              {patient.age != null && <span><strong>Age:</strong> {patient.age}Y</span>}
+              {patient.gender && <span><strong>Sex:</strong> {patient.gender}</span>}
+              {patient.bloodGroup && <span><strong>Blood Group:</strong> {patient.bloodGroup}</span>}
+              {patient.abhaId && <span><strong>ABHA ID:</strong> {patient.abhaId}</span>}
+              {patient.allergies?.length > 0 && <span className="text-rose-600 font-bold"><strong>Allergies:</strong> {patient.allergies.join(', ')}</span>}
             </div>
           </div>
 

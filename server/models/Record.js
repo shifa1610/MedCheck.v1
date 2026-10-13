@@ -4,12 +4,18 @@ const medicationSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
   dosage: { type: String, default: '' },
   frequency: { type: String, default: '' },
-  instructions: { type: String, default: '' }
+  duration: { type: String, default: '' },
+  instructions: { type: String, default: '' },
+  confidence: { type: String, default: 'low' },
+  status: { type: String, default: 'Needs Review' }
 }, { _id: false });
 
 const recordSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  patientProfileId: { type: mongoose.Schema.Types.ObjectId, ref: 'PatientProfile', default: null, index: true },
   patientName: { type: String, required: true, trim: true },
+  scanId: { type: String, default: '' },
+  sourceFilename: { type: String, default: '' },
   recordType: {
     type: String,
     required: true,

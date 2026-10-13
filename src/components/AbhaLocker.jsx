@@ -21,12 +21,12 @@ import { TRANSLATIONS } from '../data/translations';
 export default function AbhaLocker({ patient, records, setRecords, language }) {
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
   
-  const [abhaInput, setAbhaInput] = useState(patient.abhaId);
+  const [abhaInput, setAbhaInput] = useState(patient.abhaId || '');
   const [otpInput, setOtpInput] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
-  const [isLinked, setIsLinked] = useState(true);
-  const [consentGranted, setConsentGranted] = useState(true);
+  const [isLinked, setIsLinked] = useState(Boolean(patient.abhaId));
+  const [consentGranted, setConsentGranted] = useState(Boolean(patient.abhaId));
   const [copied, setCopied] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
 
@@ -236,7 +236,7 @@ export default function AbhaLocker({ patient, records, setRecords, language }) {
                 </label>
                 <input
                   type="text"
-                  value={patient.abhaAddress}
+                  value={patient.abhaAddress || 'Not linked'}
                   readOnly
                   className="w-full text-xs font-mono px-3 py-2 bg-slate-100/80 rounded-xl border border-slate-200 text-slate-600 cursor-not-allowed"
                 />

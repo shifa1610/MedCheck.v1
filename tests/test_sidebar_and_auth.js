@@ -27,8 +27,10 @@ const { SIDEBAR_MODULES } = await import('../src/data/sidebarModules.js');
 const {
   getAuthToken,
   getCurrentUser,
+  getPatientProfiles,
   getUsers,
   loginUser,
+  createPatientProfile,
   registerUser,
   logoutUser
 } = await import('../src/utils/auth.js');
@@ -91,6 +93,13 @@ global.fetch = async (url, options = {}) => {
     serverUsers.set(user.email, user);
     return { ok: true, status: 201, json: async () => ({ token: 'registered-jwt-token', user }) };
   }
+  if (String(url).endsWith('/profiles') && options.method === 'POST') {
+    const profile = { ...body, _id: 'test-profile-id' };
+    return { ok: true, status: 201, json: async () => ({ profile }) };
+  }
+  if (String(url).endsWith('/profiles')) {
+    return { ok: true, status: 200, json: async () => ({ profiles: [{ _id: 'test-profile-id', name: 'Priya Sharma' }] }) };
+  }
   throw new Error(`Unexpected auth test URL: ${url}`);
 };
 
@@ -118,6 +127,19 @@ assert.strictEqual(regRes.user.name, 'Priya Sharma');
 assert.strictEqual(regRes.user.email, 'priya@example.com');
 assert.strictEqual(getAuthToken(), 'registered-jwt-token');
 pass('Successful API registration stores JWT and user session');
+
+const createdProfile = await createPatientProfile({
+  name: 'Priya Sharma',
+  relationship: 'Self',
+  age: 30,
+  gender: 'Female',
+  bloodGroup: 'O+',
+  preferredLanguage: 'hi'
+});
+assert.strictEqual(createdProfile._id, 'test-profile-id');
+const patientProfiles = await getPatientProfiles();
+assert.strictEqual(patientProfiles[0].name, 'Priya Sharma');
+pass('Signed-up user can create and retrieve an authenticated patient profile');
 
 // Test 2.6: Prevent duplicate email registration
 const dupRes = await registerUser('Duplicate User', 'priya@example.com', 'anotherpass');

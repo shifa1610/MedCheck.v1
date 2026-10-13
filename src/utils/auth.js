@@ -158,6 +158,20 @@ export async function getMedicalRecords() {
   return result.records;
 }
 
+export async function getPatientProfiles() {
+  const result = await apiRequest('/profiles', { authenticated: true });
+  return result.profiles;
+}
+
+export async function createPatientProfile(profile) {
+  const result = await apiRequest('/profiles', {
+    method: 'POST',
+    authenticated: true,
+    body: profile
+  });
+  return result.profile;
+}
+
 export async function saveMedicalRecord(record) {
   const result = await apiRequest('/records', {
     method: 'POST',
@@ -165,6 +179,14 @@ export async function saveMedicalRecord(record) {
     body: record
   });
   return result.record;
+}
+
+export async function recognizeHandwrittenDocument(image, mimeType) {
+  return apiRequest('/recognition/handwriting', {
+    method: 'POST',
+    authenticated: true,
+    body: { image, mimeType }
+  });
 }
 
 export async function deleteMedicalRecord(id) {

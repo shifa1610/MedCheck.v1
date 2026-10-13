@@ -12,9 +12,10 @@ import {
   Zap,
   SwitchCamera
 } from 'lucide-react';
-import { scanMedicalDocument, preprocessCanvas } from '../services/ocrService';
+import { scanHandwrittenPrescription, scanMedicalDocument, preprocessCanvas } from '../services/ocrService';
+import { getAuthToken } from '../utils/auth';
 
-export default function CameraCapture({ onDocumentExtracted, onClose }) {
+export default function CameraCapture({ onDocumentExtracted, onScanStart, onClose }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
@@ -23,11 +24,13 @@ export default function CameraCapture({ onDocumentExtracted, onClose }) {
   const [facingMode, setFacingMode] = useState('environment'); // 'environment' for rear, 'user' for front
   const [capturedImage, setCapturedImage] = useState(null);
   const [contrastBoost, setContrastBoost] = useState(true);
+  const [cloudIcrConsent, setCloudIcrConsent] = useState(false);
   
   // OCR processing state
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [scanStatusText, setScanStatusText] = useState('');
+  const [scanError, setScanError] = useState('');
   const [extractedResult, setExtractedResult] = useState(null);
 
   // Initialize camera stream
@@ -108,22 +111,30 @@ export default function CameraCapture({ onDocumentExtracted, onClose }) {
   const handleRetake = () => {
     setCapturedImage(null);
     setExtractedResult(null);
+    setScanError('');
     setIsScanning(false);
+    setCloudIcrConsent(false);
     startCamera(facingMode);
   };
 
   // Run real OCR on the captured snapshot
   const handleRunOCR = async () => {
-    if (!capturedImage) return;
+    if (!capturedImage || isScanning) return;
 
     setIsScanning(true);
+    setScanError('');
     setScanProgress(5);
     setScanStatusText('Initializing Optical Character Recognition...');
+    const scanId = globalThis.crypto?.randomUUID?.() || `scan-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    onScanStart?.(scanId);
 
     try {
       const img = new Image();
       img.src = capturedImage;
-      await new Promise(resolve => { img.onload = resolve; });
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = () => reject(new Error('The captured image could not be read.'));
+      });
 
       // Apply contrast filter if requested
       const processed = preprocessCanvas(img, { contrastBoost });
@@ -131,14 +142,36 @@ export default function CameraCapture({ onDocumentExtracted, onClose }) {
       const result = await scanMedicalDocument(processed, ({ percent, statusText }) => {
         setScanProgress(percent);
         setScanStatusText(statusText);
-      });
+      }, { scanId, sourceFilename: `Camera capture ${scanId.slice(0, 8)}` });
 
       setExtractedResult(result);
-      setIsScanning(false);
     } catch (err) {
-      console.error('OCR processing failure:', err);
+      setScanError(err.message || 'Unable to read text from this photo. Retake with better lighting and closer framing.');
+    } finally {
       setIsScanning(false);
-      alert('Unable to read text from this photo. Please retake with better lighting and closer framing.');
+    }
+  };
+
+  const handleRunHandwritingICR = async () => {
+    if (!capturedImage || isScanning || !cloudIcrConsent) return;
+    setIsScanning(true);
+    setScanError('');
+    setScanProgress(10);
+    setScanStatusText('Sending the image to Google Cloud Vision for handwriting recognition...');
+    const scanId = globalThis.crypto?.randomUUID?.() || `scan-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    onScanStart?.(scanId);
+
+    try {
+      const result = await scanHandwrittenPrescription(capturedImage, {
+        scanId,
+        sourceFilename: `Camera capture ${scanId.slice(0, 8)}`
+      });
+      setScanProgress(100);
+      setExtractedResult(result);
+    } catch (error) {
+      setScanError(error.message || 'Handwriting recognition failed. Please try a clearer image.');
+    } finally {
+      setIsScanning(false);
     }
   };
 
@@ -262,45 +295,73 @@ export default function CameraCapture({ onDocumentExtracted, onClose }) {
 
           {/* Controls Bar */}
           {!isScanning && !extractedResult && (
-            <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-50 border border-slate-200 rounded-2xl">
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={contrastBoost}
-                  onChange={(e) => setContrastBoost(e.target.checked)}
-                  className="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
-                />
-                <Sliders className="w-3.5 h-3.5 text-teal-600" />
-                <span>Enhance Ink Contrast (Faint Handwriting)</span>
-              </label>
+            <div className="space-y-3 p-3 bg-slate-50 border border-slate-200 rounded-2xl">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={contrastBoost}
+                    onChange={(e) => setContrastBoost(e.target.checked)}
+                    className="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                  />
+                  <Sliders className="w-3.5 h-3.5 text-teal-600" />
+                  <span>Enhance image contrast for local OCR</span>
+                </label>
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleRetake}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-xs font-semibold text-slate-700 transition-colors"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Retake</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleRetake}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-xs font-semibold text-slate-700 transition-colors"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Retake</span>
+                  </button>
 
+                  <button
+                    onClick={handleRunOCR}
+                    className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition-all shadow-xs"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>Run Local OCR</span>
+                  </button>
+                </div>
+              </div>
+              <div className="border-t border-slate-200 pt-3 space-y-2">
+                <label className="flex items-start gap-2 text-xs text-amber-950">
+                  <input
+                    type="checkbox"
+                    checked={cloudIcrConsent}
+                    onChange={event => setCloudIcrConsent(event.target.checked)}
+                    className="mt-0.5 rounded border-amber-400 text-amber-700 focus:ring-amber-500"
+                  />
+                  <span>I agree to send this photo to Google Cloud Vision through the MedCheck server. It is not saved by the recognition route.</span>
+                </label>
+                {!getAuthToken() && <p className="text-[11px] text-slate-500">Sign in with a server account to use cloud handwriting recognition.</p>}
                 <button
-                  onClick={handleRunOCR}
-                  className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition-all shadow-xs"
+                  onClick={handleRunHandwritingICR}
+                  disabled={!cloudIcrConsent || !getAuthToken()}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-amber-700 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-amber-800 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <Sparkles className="w-4 h-4" />
-                  <span>Run OCR Analysis</span>
+                  <Sparkles className="h-4 w-4" />
+                  Recognize Handwriting with Cloud ICR
                 </button>
               </div>
             </div>
           )}
 
           {/* OCR RESULTS PREVIEW */}
+          {scanError && (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+              {scanError}
+            </div>
+          )}
+
           {extractedResult && (
             <div className="space-y-3 bg-emerald-50/60 border border-emerald-200 rounded-2xl p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-xs font-bold text-emerald-900">
                   <Check className="w-4 h-4 text-emerald-600" />
-                  <span>OCR Extraction Complete ({extractedResult.confidence}% confidence)</span>
+                  <span>OCR text read ({extractedResult.confidence}% confidence) — review required</span>
                 </div>
                 <button
                   onClick={handleRetake}

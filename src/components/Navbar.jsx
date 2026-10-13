@@ -3,14 +3,13 @@ import {
   Menu, 
   Upload, 
   Languages, 
-  CheckCircle2, 
   Users, 
   Activity,
-  User,
   LogOut,
   LogIn,
   Sparkles,
-  ShieldCheck
+  Plus,
+  MessageCircle
 } from 'lucide-react';
 import { TRANSLATIONS } from '../data/translations';
 
@@ -21,8 +20,11 @@ export default function Navbar({
   language, 
   setLanguage, 
   patient,
-  currentFamilyKey,
-  onFamilyMemberChange,
+  profiles = [],
+  selectedProfileId,
+  onSelectProfile,
+  onAddProfile,
+  canManageProfiles = false,
   onOpenUpload,
   currentUser,
   onLogout,
@@ -49,27 +51,41 @@ export default function Navbar({
             </span>
           </div>
 
-          {/* Family Member Caregiver Selector */}
+          {/* Patient profile selector */}
           <div className="flex items-center gap-2.5">
             <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-0.5 rounded-lg border border-slate-700">
               <Users className="w-3.5 h-3.5 text-teal-400" />
-              <span className="text-[11px] text-slate-300 font-medium">Record Profile:</span>
               <select
-                value={currentFamilyKey}
-                onChange={(e) => onFamilyMemberChange(e.target.value)}
+                value={selectedProfileId || ''}
+                onChange={(e) => onSelectProfile(e.target.value)}
                 className="bg-transparent text-[11px] font-bold text-white focus:outline-hidden cursor-pointer"
-                aria-label="Select family profile"
+                aria-label="Select patient profile"
               >
-                <option value="papa" className="bg-slate-900 text-white">Papa (Ramesh, 62y)</option>
-                <option value="maa" className="bg-slate-900 text-white">Maa (Sunita, 58y)</option>
-                <option value="self" className="bg-slate-900 text-white">Self (Rahul, 32y)</option>
+                {profiles.length === 0 && <option value="" className="bg-slate-900 text-white">No patient profiles</option>}
+                {profiles.map(profile => (
+                  <option key={profile.id || profile._id} value={profile.id || profile._id} className="bg-slate-900 text-white">
+                    {profile.name} · {profile.relationship || profile.relation || 'Family'}
+                  </option>
+                ))}
               </select>
+              {canManageProfiles && (
+                <button
+                  type="button"
+                  onClick={onAddProfile}
+                  className="inline-flex items-center gap-1 rounded-md bg-teal-700 px-2 py-1 text-[10px] font-bold text-white transition-colors hover:bg-teal-600"
+                  aria-label="Create patient profile"
+                  title="Create patient profile"
+                >
+                  <Plus aria-hidden="true" className="h-3 w-3" />
+                  <span className="hidden sm:inline">Add profile</span>
+                </button>
+              )}
             </div>
 
-            <div className="hidden lg:flex items-center gap-1.5 text-emerald-300 bg-slate-800 px-2.5 py-0.5 rounded-lg border border-slate-700">
+            {patient.abhaId && <div className="hidden lg:flex items-center gap-1.5 text-emerald-300 bg-slate-800 px-2.5 py-0.5 rounded-lg border border-slate-700">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               <span className="text-[11px] font-mono">ABHA: {patient.abhaId}</span>
-            </div>
+            </div>}
           </div>
         </div>
       </div>
@@ -122,14 +138,14 @@ export default function Navbar({
           <div className="flex items-center gap-2 sm:gap-3">
             
             {/* ABHA Badge (minal_medcheck style) */}
-            <div className="hidden xl:flex items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-950">
+            {patient.abhaId && <div className="hidden xl:flex items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-950">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
               </span>
               <span className="text-emerald-700 font-normal">ABHA:</span>
               <span className="font-mono font-bold text-emerald-900">{patient.abhaId}</span>
-            </div>
+            </div>}
 
             {/* Language Selector */}
             <div className="flex items-center bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 shadow-2xs hover:border-teal-600 transition-colors">
@@ -150,6 +166,21 @@ export default function Navbar({
                 <option value="gu">ગુજરાતી (Gujarati)</option>
               </select>
             </div>
+
+            <button
+              type="button"
+              onClick={() => setCurrentTab('copilot')}
+              aria-label={t.tabs.copilot}
+              aria-current={currentTab === 'copilot' ? 'page' : undefined}
+              className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition-colors ${
+                currentTab === 'copilot'
+                  ? 'border-teal-800 bg-teal-800 text-white'
+                  : 'border-teal-200 bg-teal-50 text-teal-900 hover:bg-teal-100'
+              }`}
+            >
+              <MessageCircle className="h-3.5 w-3.5" aria-hidden="true" />
+              <span className="hidden sm:inline">{t.tabs.copilot}</span>
+            </button>
 
             {/* Upload Record Button */}
             <button

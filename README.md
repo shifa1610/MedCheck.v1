@@ -17,7 +17,7 @@ In many families, **one person manages everyone’s health**. Reports are on phy
 
 ### Our Solution
 **MedCheck is an AI health copilot built for the family caregiver.** It turns a photograph of a medical document into immediate comprehension, longitudinal tracking, and safer decisions:
-1. **Understands Paper Records:** Ingests handwritten bilingual prescriptions, hospital discharge summaries, and lab panels with handwriting-aware multimodal OCR.
+1. **Reads Uploaded Images:** Runs local Tesseract OCR on uploaded image files. Extracted text is shown for human review; no external vision/AI recognition provider is configured.
 2. **Flags Medicine Conflicts:** Compares any two documents side-by-side (e.g. Hospital Discharge vs Outpatient Prescription) to highlight dose shifts (+500mg), timing changes, or duplicate blood thinners for a doctor or pharmacist to verify.
 3. **Explains in Family's Language with Voice:** Translates dense clinical jargon into everyday Hindi, Telugu, Tamil, and English with one-click audio playback.
 4. **Protects Without Diagnosing:** Adheres to a strict zero-diagnosis safety protocol—flagging differences and generating questions for the doctor rather than altering regimens.
@@ -50,7 +50,7 @@ In many families, **one person manages everyone’s health**. Reports are on phy
 ## 🏆 Scoring Rubric Alignment (100% + Bonus)
 
 ### 1. AI Utilization (35%)
-- **Handwriting-Aware Multimodal OCR:** Ingests prescriptions, lab reports, and discharge summaries. Extracts drug names, strengths (e.g. 500mg, 40mg), schedules (1-0-1, OD, BD, "भोजन के बाद"), durations, test values, and diagnoses.
+- **Local Image OCR:** Tesseract reads uploaded JPG, PNG, and WebP images in the browser. A conservative text parser surfaces readable medicine lines and fields; uncertain readings stay marked for review. It does not extract diagnoses or lab values and must not be used to make treatment decisions.
 - **Side-by-Side Clinical Verification Screen:** Human-in-the-loop review with confidence color tiers:
   - 🟢 **Green (High):** Confident clinical readings.
   - 🟡 **Amber (Check Required):** Cursive handwriting; queries `Fuse.js` over the Indian Drug Catalog to suggest candidate medicines.
@@ -187,8 +187,53 @@ Do not commit `.env`. The backend defaults to
 
 The API exposes `POST /api/auth/register`, `POST /api/auth/login`,
 `GET /api/auth/me`, and authenticated `GET`, `POST`, and `DELETE /api/records`
-routes. Passwords are hashed before storage; record routes are scoped to the
-JWT user. Verified extracted records are saved permanently when the database is
-connected. `/api/health` reports the database connection state. When the API or
-database is unavailable, the UI keeps sample records available and marks demo
-or session-only changes as not permanently saved.
+routes. Signed-in users can create patient profiles with `GET /api/profiles`
+and `POST /api/profiles`; profiles and records are scoped to the authenticated
+user, and saved records are associated with their patient profile. Passwords
+are hashed before storage. Verified extracted records are saved permanently
+when the database is connected. `/api/health` reports the database connection
+state. When the API or database is unavailable, the UI keeps sample records
+available and marks demo or session-only changes as not permanently saved.
+
+### AI Health Copilot
+
+Set `OPENAI_API_KEY` in the server-side `.env` file to enable the authenticated
+`POST /api/chat` endpoint. `OPENAI_MODEL` is optional and defaults to
+`gpt-4o-mini`. The key is never exposed to the browser. The chat sends only the
+conversation text and selected response language to OpenAI; patient profiles and
+medical records are not included. Chat requires a server-authenticated account,
+so demo/offline sessions cannot use this endpoint. The assistant provides
+general information, not diagnosis or treatment, and is not a substitute for a
+qualified healthcare professional.
+
+### Prescription scanning limits
+
+Uploaded JPG, PNG, and WebP files use local Tesseract OCR by default. For
+handwritten prescriptions, a signed-in user can separately opt in to send the
+image to Google Cloud Vision through the authenticated
+`POST /api/recognition/handwriting` endpoint. This image is not stored by the
+MedCheck recognition route. Set `GOOGLE_CLOUD_VISION_API_KEY` on the server and
+enable the Cloud Vision API to make cloud handwriting recognition available;
+the key is never sent to the browser. Cloud recognition requires an explicit
+per-image consent checkbox and is unavailable to offline/demo sessions.
+
+Text extraction and medicine-field matching run separately for each scan,
+which receives a unique scan ID and keeps its filename with the review data.
+The local parser only extracts explicit medicine lines and visible strength,
+frequency, duration, and instructions; it does not infer missing doses or
+medicine names. All results remain marked for human review before saving.
+
+For connected accounts, the health summary, medicine list, comparison view, and
+visit preparation use saved document fields rather than demo health values. The
+Copilot does not receive those records; include relevant details in your chat
+only if you choose to share them with OpenAI. The printable prescription review
+brief also uses scanned records after human verification in demo sessions.
+Explicit differences in the same medicine's recorded directions are presented
+for prescriber verification; they are not confirmed interactions. Purpose and
+diet guidance are not inferred when a prescription does not state them.
+
+PDF recognition is not configured. Convert the relevant page to an image
+before scanning. The backend `/api/upload` endpoint is intake-only and holds
+the file in memory for a receipt; it does not perform OCR or save the uploaded
+file. Confirmed medical records are stored through the authenticated records
+API.

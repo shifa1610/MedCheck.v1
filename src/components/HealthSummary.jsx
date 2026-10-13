@@ -13,8 +13,9 @@ import {
 } from 'lucide-react';
 import { TRANSLATIONS } from '../data/translations';
 import VoicePlayer from './VoicePlayer';
+import { findPrescriptionDifferences, getPrescriptionReviewFacts } from '../services/prescriptionReview';
 
-export default function HealthSummary({ records, patient, language }) {
+export default function HealthSummary({ records, patient, language, isDemo = true }) {
   const t = TRANSLATIONS[language] || TRANSLATIONS.en;
 
   if (records.length === 0) {
@@ -37,6 +38,75 @@ export default function HealthSummary({ records, patient, language }) {
             </div>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (!isDemo) {
+    const prescriptionFacts = getPrescriptionReviewFacts(records);
+    const prescriptionDifferences = findPrescriptionDifferences(records);
+    const labValues = records.flatMap(record => record.biomarkers || record.testValues || []);
+
+    return (
+      <div className="space-y-5">
+        <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs leading-relaxed text-amber-900">
+          This overview summarizes saved document text only. It does not diagnose, determine whether medicines are safe, or replace review by a clinician.
+        </section>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="text-base font-bold text-slate-900">Saved health records for {patient.name}</h2>
+          <div className="mt-3 space-y-2">
+            {records.map((record, index) => (
+              <div key={record.id || record._id || index} className="rounded-xl bg-slate-50 p-3">
+                <div className="font-semibold text-slate-900">{record.title || record.category || 'Medical record'}</div>
+                <div className="mt-1 text-[11px] text-slate-600">
+                  {record.sourceFilename || record.facility || 'Source not recorded'}
+                  {record.date ? ` · ${record.date}` : ''}
+                  {record.doctor ? ` · ${record.doctor}` : ''}
+                </div>
+                {record.summary?.plainText && <p className="mt-2 text-xs text-slate-700">{record.summary.plainText}</p>}
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="font-bold text-slate-900">Extracted prescription details</h2>
+          {prescriptionFacts.length ? (
+            <div className="mt-3 space-y-2">
+              {prescriptionFacts.map((medicine, index) => (
+                <div key={`${medicine.sourceFilename}-${medicine.name}-${index}`} className="rounded-xl border border-slate-100 p-3 text-xs">
+                  <div className="font-semibold text-slate-900">{medicine.name || 'Medicine name needs review'} · {medicine.dosage || 'Dose not detected'} · {medicine.frequency || 'Frequency not detected'}</div>
+                  <div className="mt-1 text-slate-600">Source: {medicine.sourceFilename}{medicine.duration ? ` · ${medicine.duration}` : ''}{medicine.instructions ? ` · ${medicine.instructions}` : ''}</div>
+                  <div className="mt-1 text-amber-800">Purpose is not inferred from medicine name; verify all fields with the prescriber or pharmacist.</div>
+                </div>
+              ))}
+            </div>
+          ) : <p className="mt-2 text-sm text-slate-600">No medicine fields were extracted from saved prescriptions.</p>}
+        </section>
+
+        {prescriptionDifferences.length > 0 && (
+          <section className="rounded-2xl border border-rose-200 bg-rose-50/60 p-5">
+            <h2 className="font-bold text-rose-900">Prescription differences to verify</h2>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-800">
+              {prescriptionDifferences.map((difference, index) => (
+                <li key={`${difference.medicine}-${difference.field}-${index}`}>
+                  {difference.medicine}: {difference.label} is {difference.recentValue} in {difference.recentDocument} and {difference.previousValue} in {difference.previousDocument}.
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 text-xs text-rose-900">Ask the prescriber which direction is current. Do not change a medicine based on this comparison.</p>
+          </section>
+        )}
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="font-bold text-slate-900">Lab values explicitly saved from documents</h2>
+          {labValues.length ? (
+            <ul className="mt-2 space-y-1 text-sm text-slate-700">
+              {labValues.map((value, index) => <li key={`${value.name || value.testName}-${index}`}>{value.name || value.testName}: {value.value || value.observedValue || 'Value not detected'} {value.unit || ''}</li>)}
+            </ul>
+          ) : <p className="mt-2 text-sm text-slate-600">No lab values were extracted. MedCheck will not fill in sample results for this account.</p>}
+        </section>
       </div>
     );
   }
