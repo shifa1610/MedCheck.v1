@@ -353,7 +353,8 @@ export default function App() {
   const handleRawRecordExtracted = (rawRecord) => {
     setPendingVerificationRecord(rawRecord);
     setCurrentTab('verify');
-    setToastMessage(`Record extracted! Please review on the Verify Screen before saving.`);
+    const nameLabel = rawRecord?.sourceFileName ? ` "${rawRecord.sourceFileName}"` : '';
+    setToastMessage(`Prescription${nameLabel} extracted! Please review on the Verify Screen before saving.`);
     setTimeout(() => setToastMessage(''), 5000);
   };
 

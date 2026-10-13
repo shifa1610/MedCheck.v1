@@ -113,88 +113,119 @@ export default function MedicationTracker({ records, language, isDemo = true }) 
             Daily Regimen Schedule
           </h3>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Morning Slot */}
-            <div className="bg-amber-50/50 rounded-2xl border border-amber-200/70 p-4">
-              <div className="flex items-center justify-between pb-3 border-b border-amber-200/50">
-                <div className="flex items-center gap-2 text-amber-900 font-bold text-xs uppercase tracking-wider">
-                  <Sun className="w-4 h-4 text-amber-600" />
-                  {t.medications.morning} (08:00 AM)
-                </div>
-                <span className="text-[10px] bg-amber-100 text-amber-800 font-semibold px-2 py-0.5 rounded-full">
-                  With Breakfast
-                </span>
-              </div>
+          {(() => {
+            const morningMeds = allMedications.filter(m => {
+              const text = `${m.timing || ''} ${m.frequency || ''} ${m.instructions || ''}`.toLowerCase();
+              return /morning|breakfast|सुबह|ఉదయం|1-[01]-[01]|od|tds|bd|daily/i.test(text) || (m.frequency && (m.frequency.startsWith('1-') || m.frequency.includes('Morning') || m.frequency.includes('OD')));
+            });
 
-              <div className="mt-3 space-y-2.5">
-                <div className="bg-white p-3 rounded-xl border border-amber-100 shadow-xs">
-                  <div className="flex justify-between items-start">
-                    <span className="font-bold text-xs text-slate-900">Tab Metformin HCl</span>
-                    <span className="text-[11px] font-mono text-purple-700 font-semibold">500 mg</span>
+            const afternoonMeds = allMedications.filter(m => {
+              const text = `${m.timing || ''} ${m.frequency || ''} ${m.instructions || ''}`.toLowerCase();
+              return /afternoon|noon|lunch|1-1-1|tds|qid/i.test(text) || (m.frequency && m.frequency.includes('-1-'));
+            });
+
+            const nightMeds = allMedications.filter(m => {
+              const text = `${m.timing || ''} ${m.frequency || ''} ${m.instructions || ''}`.toLowerCase();
+              return /night|bedtime|dinner|रात|పడుకునే|0-0-1|1-0-1|1-1-1|bd|tds|qhs|hs/i.test(text) || (m.frequency && (m.frequency.endsWith('-1') || m.frequency.includes('Night') || m.frequency.includes('Bedtime') || m.frequency.includes('BD')));
+            });
+
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Morning Slot */}
+                <div className="bg-amber-50/50 rounded-2xl border border-amber-200/70 p-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-amber-200/50">
+                    <div className="flex items-center gap-2 text-amber-900 font-bold text-xs uppercase tracking-wider">
+                      <Sun className="w-4 h-4 text-amber-600" />
+                      {t.medications.morning} (08:00 AM)
+                    </div>
+                    <span className="text-[10px] bg-amber-100 text-amber-800 font-semibold px-2 py-0.5 rounded-full">
+                      {morningMeds.length} Med{morningMeds.length !== 1 ? 's' : ''}
+                    </span>
                   </div>
-                  <div className="text-[11px] text-slate-500 mt-1">1 Tab • After meal (भोजन के बाद)</div>
-                </div>
 
-                <div className="bg-white p-3 rounded-xl border border-amber-100 shadow-xs">
-                  <div className="flex justify-between items-start">
-                    <span className="font-bold text-xs text-slate-900">Tab Telmisartan</span>
-                    <span className="text-[11px] font-mono text-purple-700 font-semibold">40 mg</span>
+                  <div className="mt-3 space-y-2.5">
+                    {morningMeds.length === 0 ? (
+                      <div className="bg-white/80 p-3 rounded-xl border border-amber-100 text-center text-xs text-slate-500">
+                        No morning medications scheduled.
+                      </div>
+                    ) : (
+                      morningMeds.map((med, i) => (
+                        <div key={i} className="bg-white p-3 rounded-xl border border-amber-100 shadow-xs">
+                          <div className="flex justify-between items-start">
+                            <span className="font-bold text-xs text-slate-900">{med.name}</span>
+                            <span className="text-[11px] font-mono text-purple-700 font-semibold">{med.dosage}</span>
+                          </div>
+                          <div className="text-[11px] text-slate-500 mt-1">{med.timing || med.frequency || 'Take with water'}</div>
+                        </div>
+                      ))
+                    )}
                   </div>
-                  <div className="text-[11px] text-slate-500 mt-1">1 Tab • BP & Renal protection</div>
                 </div>
-              </div>
-            </div>
 
-            {/* Afternoon Slot */}
-            <div className="bg-sky-50/50 rounded-2xl border border-sky-200/70 p-4">
-              <div className="flex items-center justify-between pb-3 border-b border-sky-200/50">
-                <div className="flex items-center gap-2 text-sky-900 font-bold text-xs uppercase tracking-wider">
-                  <Sunset className="w-4 h-4 text-sky-600" />
-                  {t.medications.afternoon} (01:30 PM)
-                </div>
-                <span className="text-[10px] bg-sky-100 text-sky-800 font-semibold px-2 py-0.5 rounded-full">
-                  Post Lunch
-                </span>
-              </div>
-
-              <div className="mt-3">
-                <div className="bg-white/80 p-4 rounded-xl border border-sky-100 text-center text-xs text-slate-500">
-                  No routine scheduled medications at noon.
-                </div>
-              </div>
-            </div>
-
-            {/* Night Slot */}
-            <div className="bg-indigo-50/50 rounded-2xl border border-indigo-200/70 p-4">
-              <div className="flex items-center justify-between pb-3 border-b border-indigo-200/50">
-                <div className="flex items-center gap-2 text-indigo-900 font-bold text-xs uppercase tracking-wider">
-                  <Moon className="w-4 h-4 text-indigo-600" />
-                  {t.medications.night} (09:00 PM)
-                </div>
-                <span className="text-[10px] bg-indigo-100 text-indigo-800 font-semibold px-2 py-0.5 rounded-full">
-                  Bedtime / Post Dinner
-                </span>
-              </div>
-
-              <div className="mt-3 space-y-2.5">
-                <div className="bg-white p-3 rounded-xl border border-indigo-100 shadow-xs">
-                  <div className="flex justify-between items-start">
-                    <span className="font-bold text-xs text-slate-900">Tab Metformin HCl</span>
-                    <span className="text-[11px] font-mono text-purple-700 font-semibold">500 mg</span>
+                {/* Afternoon Slot */}
+                <div className="bg-sky-50/50 rounded-2xl border border-sky-200/70 p-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-sky-200/50">
+                    <div className="flex items-center gap-2 text-sky-900 font-bold text-xs uppercase tracking-wider">
+                      <Sunset className="w-4 h-4 text-sky-600" />
+                      {t.medications.afternoon} (01:30 PM)
+                    </div>
+                    <span className="text-[10px] bg-sky-100 text-sky-800 font-semibold px-2 py-0.5 rounded-full">
+                      {afternoonMeds.length} Med{afternoonMeds.length !== 1 ? 's' : ''}
+                    </span>
                   </div>
-                  <div className="text-[11px] text-slate-500 mt-1">1 Tab • With dinner</div>
+
+                  <div className="mt-3 space-y-2.5">
+                    {afternoonMeds.length === 0 ? (
+                      <div className="bg-white/80 p-4 rounded-xl border border-sky-100 text-center text-xs text-slate-500">
+                        No routine scheduled medications at noon.
+                      </div>
+                    ) : (
+                      afternoonMeds.map((med, i) => (
+                        <div key={i} className="bg-white p-3 rounded-xl border border-sky-100 shadow-xs">
+                          <div className="flex justify-between items-start">
+                            <span className="font-bold text-xs text-slate-900">{med.name}</span>
+                            <span className="text-[11px] font-mono text-purple-700 font-semibold">{med.dosage}</span>
+                          </div>
+                          <div className="text-[11px] text-slate-500 mt-1">{med.timing || med.frequency}</div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
 
-                <div className="bg-white p-3 rounded-xl border border-indigo-100 shadow-xs">
-                  <div className="flex justify-between items-start">
-                    <span className="font-bold text-xs text-slate-900">Tab Atorvastatin</span>
-                    <span className="text-[11px] font-mono text-purple-700 font-semibold">20 mg</span>
+                {/* Night Slot */}
+                <div className="bg-indigo-50/50 rounded-2xl border border-indigo-200/70 p-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-indigo-200/50">
+                    <div className="flex items-center gap-2 text-indigo-900 font-bold text-xs uppercase tracking-wider">
+                      <Moon className="w-4 h-4 text-indigo-600" />
+                      {t.medications.night} (09:00 PM)
+                    </div>
+                    <span className="text-[10px] bg-indigo-100 text-indigo-800 font-semibold px-2 py-0.5 rounded-full">
+                      {nightMeds.length} Med{nightMeds.length !== 1 ? 's' : ''}
+                    </span>
                   </div>
-                  <div className="text-[11px] text-slate-500 mt-1">1 Tab • Bedtime (रात को सोने से पहले)</div>
+
+                  <div className="mt-3 space-y-2.5">
+                    {nightMeds.length === 0 ? (
+                      <div className="bg-white/80 p-3 rounded-xl border border-indigo-100 text-center text-xs text-slate-500">
+                        No nighttime medications scheduled.
+                      </div>
+                    ) : (
+                      nightMeds.map((med, i) => (
+                        <div key={i} className="bg-white p-3 rounded-xl border border-indigo-100 shadow-xs">
+                          <div className="flex justify-between items-start">
+                            <span className="font-bold text-xs text-slate-900">{med.name}</span>
+                            <span className="text-[11px] font-mono text-purple-700 font-semibold">{med.dosage}</span>
+                          </div>
+                          <div className="text-[11px] text-slate-500 mt-1">{med.timing || med.frequency || 'At bedtime'}</div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
+            );
+          })()}
         </div>
 
         {/* Detailed Medication Cards */}

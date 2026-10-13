@@ -341,7 +341,7 @@ export default function MedicineConflictDetector({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
                 <div className="bg-teal-50/70 border border-teal-200 rounded-2xl p-3.5">
                   <span className="text-[10px] font-bold text-teal-700 uppercase tracking-wider block mb-1">
-                    Document A (Max Hospital Discharge)
+                    Document A ({activeComparison.docA.title})
                   </span>
                   <div className="text-sm font-extrabold text-teal-950">
                     {conflict.docAValue}
@@ -350,7 +350,7 @@ export default function MedicineConflictDetector({
 
                 <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5">
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                    Document B (Fortis Clinic Rx)
+                    Document B ({activeComparison.docB.title})
                   </span>
                   <div className="text-sm font-extrabold text-slate-700">
                     {conflict.docBValue}

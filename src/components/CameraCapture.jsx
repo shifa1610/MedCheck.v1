@@ -372,8 +372,8 @@ export default function CameraCapture({ onDocumentExtracted, onScanStart, onClos
               </div>
 
               {/* Extracted text snippet */}
-              <div className="p-3 bg-white rounded-xl border border-emerald-200/80 text-xs text-slate-700 max-h-32 overflow-y-auto font-mono whitespace-pre-wrap leading-relaxed">
-                {extractedResult.rawText || "No readable text found in this framing."}
+              <div className="p-3 bg-white rounded-xl border border-emerald-200/80 text-xs text-slate-800 max-h-36 overflow-y-auto font-mono whitespace-pre-wrap leading-relaxed shadow-2xs">
+                {extractedResult.structuredRecord?.formattedText || extractedResult.rawText || "No readable text found in this framing."}
               </div>
 
               {/* Clinical summary preview */}
