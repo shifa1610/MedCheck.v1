@@ -7,6 +7,22 @@ const MAX_MESSAGE_LENGTH = 4000;
 const MAX_TOTAL_LENGTH = 12000;
 const SUPPORTED_LANGUAGES = new Set(['en', 'hi', 'te', 'ta', 'kn', 'ml', 'mr', 'gu']);
 
+function getProviderErrorMessage(status, code) {
+  if (status === 401 || code === 'invalid_api_key') {
+    return 'The OpenAI API key was rejected. Check the server API key configuration.';
+  }
+  if (status === 429 && (code === 'insufficient_quota' || code === 'billing_hard_limit_reached' || code === 'credit_balance_exhausted')) {
+    return 'The OpenAI API account has no available credits or has reached its billing limit. Add API credits or check the project budget.';
+  }
+  if (status === 429) {
+    return 'The OpenAI API is rate-limiting requests. Wait a moment and try again.';
+  }
+  if (status === 404 || code === 'model_not_found') {
+    return 'The configured OpenAI model is unavailable. Check OPENAI_MODEL in the server environment.';
+  }
+  return 'The chat provider could not complete your request. Please try again.';
+}
+
 router.use((req, res, next) => {
   res.set('Cache-Control', 'no-store');
   next();
@@ -70,8 +86,15 @@ router.post('/', async (req, res) => {
     });
 
     if (!openAIResponse.ok) {
-      console.error(`[MedCheck] OpenAI chat returned HTTP ${openAIResponse.status}.`);
-      return res.status(502).json({ error: 'The chat provider could not complete your request. Please try again.' });
+      let providerCode = '';
+      try {
+        const providerError = await openAIResponse.json();
+        providerCode = providerError?.error?.code || '';
+      } catch {
+        // Use the HTTP status when the provider error body is not valid JSON.
+      }
+      console.error(`[MedCheck] OpenAI chat returned HTTP ${openAIResponse.status}${providerCode ? ` (${providerCode})` : ''}.`);
+      return res.status(502).json({ error: getProviderErrorMessage(openAIResponse.status, providerCode) });
     }
 
     let result;

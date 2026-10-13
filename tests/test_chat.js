@@ -100,9 +100,23 @@ try {
   assert.equal(missingConfiguration.status, 503, 'Missing provider configuration must be explicit');
 
   process.env.OPENAI_API_KEY = 'openai-test-key';
-  globalThis.fetch = async () => ({ ok: false, status: 429 });
+  globalThis.fetch = async () => ({
+    ok: false,
+    status: 429,
+    json: async () => ({ error: { code: 'insufficient_quota', message: 'Private provider detail' } })
+  });
   const providerFailure = await request({ messages: [{ role: 'user', content: 'Hello' }] });
   assert.equal(providerFailure.status, 502, 'Provider errors must be surfaced');
+  assert.match(providerFailure.body.error, /no available credits|billing limit/i, 'Quota exhaustion should give a clear action');
+  assert.ok(!providerFailure.body.error.includes('Private provider detail'), 'Raw provider error details must not be exposed');
+
+  globalThis.fetch = async () => ({
+    ok: false,
+    status: 429,
+    json: async () => ({ error: { code: 'rate_limit_exceeded' } })
+  });
+  const rateLimited = await request({ messages: [{ role: 'user', content: 'Hello' }] });
+  assert.match(rateLimited.body.error, /rate-limiting/i, 'Ordinary rate limiting should not be reported as exhausted quota');
 
   console.log('Chat tests passed: authentication, message validation, data minimization, and provider errors.');
 } finally {
