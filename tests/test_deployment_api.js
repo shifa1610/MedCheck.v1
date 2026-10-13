@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import mongoose from 'mongoose';
 
 process.env.JWT_SECRET = 'deployment-route-test-secret';
 const { default: apiHandler } = await import('../api/[...path].js');
@@ -31,4 +32,5 @@ try {
   console.log('Deployment API routing tests passed: health, login routing, and authenticated chat route.');
 } finally {
   await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  await mongoose.disconnect();
 }
