@@ -16,9 +16,14 @@ import {
   Check,
   Edit3,
   Plus,
-  Trash2
+  Trash2,
+  Copy,
+  Sparkles,
+  RefreshCw,
+  FileCheck
 } from 'lucide-react';
 import { validateMedicine } from '../services/validationService';
+import { formatClinicalDocument, extractMedicalRecord } from '../services/aiService';
 
 // Default sample data used if user opens Verify Review directly
 const DEFAULT_SAMPLE_RECORD = {
@@ -79,36 +84,52 @@ const DEFAULT_SAMPLE_RECORD = {
 function buildStateFromRecord(base) {
   const isSample = !base;
   const target = base || DEFAULT_SAMPLE_RECORD;
+  const medicines = (target.medications || target.medicines || []).map(m => {
+    const validated = validateMedicine(m.name || m.rawName);
+    return {
+      ...m,
+      name: m.name || m.rawName || 'Unspecified Medicine',
+      dosage: m.dosage || '',
+      frequency: m.frequency || 'As prescribed',
+      matchedName: validated.matchedName || m.name,
+      confidence: m.confidence || validated.confidence || 'medium',
+      status: m.status || (m.confidence === 'high' ? 'Verified' : 'Pending Review'),
+      candidateMatches: m.candidateMatches || validated.candidateMatches || [],
+      lookAlikeWarning: validated.lookAlikeWarning,
+      sourceSnippet: m.sourceSnippet || `Rx Line: "${m.name} ${m.dosage || ''} ${m.frequency || ''}"`
+    };
+  });
+
+  const testValues = (target.biomarkers || target.testValues || []).map(b => ({
+    ...b,
+    testName: b.name || b.testName,
+    observedValue: b.value || b.observedValue,
+    confidence: b.confidence || 'high',
+    status: b.status || 'Verified',
+    sourceSnippet: b.sourceSnippet || `Report line: "${b.name || b.testName} ... ${b.value || b.observedValue} ${b.unit || ''} (Ref: ${b.referenceRange || '< normal'})"`
+  }));
+
+  const formattedText = target.formattedText || formatClinicalDocument({
+    title: target.title || "Clinical Prescription",
+    facility: target.facility || (isSample ? "Fortis Escorts Heart Clinic" : "Medical Healthcare Clinic"),
+    doctor: target.doctor || (isSample ? "Dr. Rajesh Sharma, MD" : "Attending Physician"),
+    patientName: target.patientName,
+    date: target.date || new Date().toISOString().split('T')[0],
+    medications: medicines,
+    biomarkers: testValues
+  });
+
   return {
     ...target,
     title: target.title || "Clinical Prescription",
     facility: target.facility || (isSample ? "Fortis Escorts Heart Clinic" : "Medical Healthcare Clinic"),
     doctor: target.doctor || (isSample ? "Dr. Rajesh Sharma, MD" : "Attending Physician"),
     date: target.date || new Date().toISOString().split('T')[0],
+    rawText: target.rawText || "",
+    formattedText,
     verificationStatus: target.verificationStatus || "Pending Review",
-    medicines: (target.medications || target.medicines || []).map(m => {
-      const validated = validateMedicine(m.name || m.rawName);
-      return {
-        ...m,
-        name: m.name || m.rawName || 'Unspecified Medicine',
-        dosage: m.dosage || '',
-        frequency: m.frequency || 'As prescribed',
-        matchedName: validated.matchedName || m.name,
-        confidence: m.confidence || validated.confidence || 'medium',
-        status: m.status || (m.confidence === 'high' ? 'Verified' : 'Pending Review'),
-        candidateMatches: m.candidateMatches || validated.candidateMatches || [],
-        lookAlikeWarning: validated.lookAlikeWarning,
-        sourceSnippet: m.sourceSnippet || `Rx Line: "${m.name} ${m.dosage || ''} ${m.frequency || ''}"`
-      };
-    }),
-    testValues: (target.biomarkers || target.testValues || []).map(b => ({
-      ...b,
-      testName: b.name || b.testName,
-      observedValue: b.value || b.observedValue,
-      confidence: b.confidence || 'high',
-      status: b.status || 'Verified',
-      sourceSnippet: b.sourceSnippet || `Report line: "${b.name || b.testName} ... ${b.value || b.observedValue} ${b.unit || ''} (Ref: ${b.referenceRange || '< normal'})"`
-    }))
+    medicines,
+    testValues
   };
 }
 
@@ -121,6 +142,11 @@ export default function VerifyScreen({
 }) {
   const [data, setData] = useState(() => buildStateFromRecord(rawExtractedData));
   const [activeSnippet, setActiveSnippet] = useState(null);
+  const [activeInspectorTab, setActiveInspectorTab] = useState('formatted'); // 'formatted' | 'edit' | 'raw' | 'snippets'
+  const [editableText, setEditableText] = useState(() => data.formattedText || data.rawText || '');
+  const [isReparsing, setIsReparsing] = useState(false);
+  const [copiedToast, setCopiedToast] = useState(false);
+  const [reparseNotice, setReparseNotice] = useState('');
   const [overallStatus, setOverallStatus] = useState(() => {
     if (rawExtractedData?.verificationStatus?.includes('Needs Review')) return 'Needs Correction';
     return rawExtractedData?.verificationStatus || 'Pending Review';
@@ -130,7 +156,9 @@ export default function VerifyScreen({
   // Synchronize state when a new upload or scan is passed to rawExtractedData
   useEffect(() => {
     if (rawExtractedData) {
-      setData(buildStateFromRecord(rawExtractedData));
+      const updated = buildStateFromRecord(rawExtractedData);
+      setData(updated);
+      setEditableText(updated.formattedText || updated.rawText || '');
       setOverallStatus(
         rawExtractedData.verificationStatus?.includes('Needs Review') 
           ? 'Needs Correction' 
@@ -138,6 +166,43 @@ export default function VerifyScreen({
       );
     }
   }, [rawExtractedData]);
+
+  const handleReparseText = async () => {
+    if (!editableText || editableText.trim().length === 0) return;
+    setIsReparsing(true);
+    setReparseNotice('');
+    try {
+      const reparsed = await extractMedicalRecord(editableText, {
+        fileName: data.sourceFileName || "Edited Prescription Text",
+        scanId: data.scanId,
+        skipDelay: true
+      });
+      const updated = buildStateFromRecord(reparsed);
+      setData(updated);
+      setOverallStatus(
+        reparsed.verificationStatus?.includes('Needs Review') 
+          ? 'Needs Correction' 
+          : (reparsed.verificationStatus || 'Pending Review')
+      );
+      setReparseNotice(`Successfully parsed ${updated.medicines.length} medicine(s) and ${updated.testValues.length} test value(s)!`);
+      setTimeout(() => setReparseNotice(''), 4000);
+    } catch (err) {
+      console.error('Re-parse failure:', err);
+      setReparseNotice('Could not re-parse the document. Check text formatting.');
+      setTimeout(() => setReparseNotice(''), 4000);
+    } finally {
+      setIsReparsing(false);
+    }
+  };
+
+  const handleCopyFormattedText = () => {
+    const textToCopy = data.formattedText || editableText;
+    if (navigator?.clipboard) {
+      navigator.clipboard.writeText(textToCopy);
+      setCopiedToast(true);
+      setTimeout(() => setCopiedToast(false), 2500);
+    }
+  };
 
   const handleSelectCandidate = (index, candidateName) => {
     setData(prev => {
@@ -310,68 +375,223 @@ export default function VerifyScreen({
       {/* Side-by-Side Verification Body */}
       <div className="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-slate-200">
         
-        {/* Left Column (5 Cols): Source Document Inspector */}
-        <div className="lg:col-span-5 bg-slate-50 p-4 sm:p-5 flex flex-col space-y-4">
-          <div className="flex items-center justify-between pb-2 border-b border-slate-200">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-              <FileText className="w-4 h-4 text-emerald-600" />
-              Original Document Snippets
-            </span>
-            <span className="text-[11px] text-slate-500 font-medium">
-              {data.facility}
-            </span>
-          </div>
-
-          <div className="bg-white rounded-xl p-3.5 border border-slate-200 text-xs space-y-2">
-            <div className="text-[11px] text-slate-500 pb-2 border-b border-slate-100">
-              <span className="font-semibold text-slate-700">Document:</span> {data.title}
-              <br />
-              <span className="font-semibold text-slate-700">Doctor:</span> {data.doctor} • {data.date}
+        {/* Left Column (5 Cols): Interactive Source Document & Text Inspector */}
+        <div className="lg:col-span-5 bg-slate-50 p-4 sm:p-5 flex flex-col space-y-3.5">
+          {/* Top Inspector Header with Tabs */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                <FileCheck className="w-4 h-4 text-emerald-600" />
+                Document Text & OCR
+              </span>
+              <span className="text-[11px] text-slate-500 font-medium truncate max-w-[180px]">
+                {data.facility}
+              </span>
             </div>
 
-            <div className="space-y-1.5 pt-1">
-              <p className="text-[11px] font-bold text-slate-700">Click a snippet to inspect:</p>
-              {data.medicines.map((m, idx) => (
-                <div
-                  key={idx}
-                  onClick={() => setActiveSnippet(m.sourceSnippet)}
-                  className={`p-2 rounded-lg cursor-pointer text-xs transition-colors font-mono ${
-                    activeSnippet === m.sourceSnippet 
-                      ? 'bg-emerald-100 text-emerald-900 border border-emerald-300 font-bold' 
-                      : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200'
-                  }`}
-                >
-                  {m.sourceSnippet}
-                </div>
-              ))}
-
-              {data.testValues.map((t, idx) => (
-                <div
-                  key={idx}
-                  onClick={() => setActiveSnippet(t.sourceSnippet)}
-                  className={`p-2 rounded-lg cursor-pointer text-xs transition-colors font-mono ${
-                    activeSnippet === t.sourceSnippet 
-                      ? 'bg-emerald-100 text-emerald-900 border border-emerald-300 font-bold' 
-                      : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200'
-                  }`}
-                >
-                  {t.sourceSnippet}
-                </div>
-              ))}
+            {/* Tab Switcher */}
+            <div className="grid grid-cols-4 gap-1 p-1 bg-slate-200/70 rounded-xl text-center">
+              <button
+                type="button"
+                onClick={() => setActiveInspectorTab('formatted')}
+                className={`py-1.5 px-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+                  activeInspectorTab === 'formatted'
+                    ? 'bg-white text-emerald-800 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Clinical Format
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveInspectorTab('edit')}
+                className={`py-1.5 px-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                  activeInspectorTab === 'edit'
+                    ? 'bg-white text-emerald-800 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Edit3 className="w-3 h-3 shrink-0" />
+                <span>Edit & Re-parse</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveInspectorTab('raw')}
+                className={`py-1.5 px-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+                  activeInspectorTab === 'raw'
+                    ? 'bg-white text-emerald-800 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Raw OCR
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveInspectorTab('snippets')}
+                className={`py-1.5 px-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+                  activeInspectorTab === 'snippets'
+                    ? 'bg-white text-emerald-800 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Snippets
+              </button>
             </div>
           </div>
 
-          {activeSnippet && (
-            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-950">
-              <div className="font-bold text-[11px] text-emerald-800 mb-1">
-                Active Cross-Reference Snippet:
+          {/* TAB 1: CLINICAL FORMATTED RECORD */}
+          {activeInspectorTab === 'formatted' && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-700">Structured Clinical Text:</span>
+                <button
+                  onClick={handleCopyFormattedText}
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 bg-white hover:bg-emerald-50 text-emerald-700 border border-slate-200 hover:border-emerald-300 rounded-lg transition-colors cursor-pointer"
+                >
+                  {copiedToast ? (
+                    <>
+                      <Check className="w-3 h-3 text-emerald-600" />
+                      <span>Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3 h-3 text-slate-500" />
+                      <span>Copy Text</span>
+                    </>
+                  )}
+                </button>
               </div>
-              <p className="font-mono text-[11px]">{activeSnippet}</p>
+
+              {/* Formatted Text Box */}
+              <div className="bg-white rounded-xl p-3 border border-slate-200 text-xs font-mono whitespace-pre-wrap max-h-[380px] overflow-y-auto leading-relaxed text-slate-800 shadow-2xs">
+                {data.formattedText || "No formatted clinical text available."}
+              </div>
+
+              <div className="p-2.5 bg-emerald-50/70 border border-emerald-200/80 rounded-xl text-[11px] text-emerald-900 flex items-start gap-2">
+                <Sparkles className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold">Clinical Normalizer Active:</span> OCR character ambiguities (e.g. 5OOmg, l-0-l, Tah.) have been standardized into clear clinical notation.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: EDIT & RE-PARSE */}
+          {activeInspectorTab === 'edit' && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-700">Correct Misread Characters:</span>
+                <span className="text-[11px] text-slate-500">Edit text & re-extract</span>
+              </div>
+
+              <textarea
+                value={editableText}
+                onChange={(e) => setEditableText(e.target.value)}
+                rows={12}
+                placeholder="Paste or edit prescription text here..."
+                className="w-full text-xs font-mono p-3 bg-white border border-slate-300 rounded-xl focus:border-emerald-500 focus:outline-hidden text-slate-900 leading-relaxed resize-none shadow-2xs"
+              />
+
+              {reparseNotice && (
+                <div className="p-2 bg-emerald-100 text-emerald-900 text-xs rounded-lg font-medium">
+                  {reparseNotice}
+                </div>
+              )}
+
+              <div className="flex items-center justify-between gap-2 pt-1">
+                <p className="text-[10px] text-slate-500 leading-tight">
+                  Fix any unreadable drug names or doses and click Re-parse.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleReparseText}
+                  disabled={isReparsing}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-400 text-white text-xs font-bold rounded-lg shadow-xs transition-colors cursor-pointer shrink-0"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isReparsing ? 'animate-spin' : ''}`} />
+                  <span>{isReparsing ? 'Parsing...' : '⚡ Re-parse Text'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: RAW OCR */}
+          {activeInspectorTab === 'raw' && (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                <span className="bg-slate-200/80 text-slate-700 px-2 py-0.5 rounded-md font-semibold">
+                  OCR Engine: Tesseract.js (Adaptive Preprocessed)
+                </span>
+                <span className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md font-bold">
+                  {data.ocrMetadata?.confidence || 90}% Confidence
+                </span>
+              </div>
+
+              <div className="bg-white rounded-xl p-3 border border-slate-200 text-xs font-mono whitespace-pre-wrap max-h-[380px] overflow-y-auto leading-relaxed text-slate-700 shadow-2xs">
+                {data.rawText || "No raw OCR text available."}
+              </div>
+
+              <div className="text-[11px] text-slate-500">
+                Word Count: {data.ocrMetadata?.wordsCount || data.rawText?.split(/\s+/).filter(Boolean).length || 0} tokens
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: EVIDENCE SNIPPETS */}
+          {activeInspectorTab === 'snippets' && (
+            <div className="space-y-3">
+              <div className="bg-white rounded-xl p-3.5 border border-slate-200 text-xs space-y-2">
+                <div className="text-[11px] text-slate-500 pb-2 border-b border-slate-100">
+                  <span className="font-semibold text-slate-700">Document:</span> {data.title}
+                  <br />
+                  <span className="font-semibold text-slate-700">Doctor:</span> {data.doctor} • {data.date}
+                </div>
+
+                <div className="space-y-1.5 pt-1 max-h-[260px] overflow-y-auto">
+                  <p className="text-[11px] font-bold text-slate-700">Click a snippet to inspect:</p>
+                  {data.medicines.map((m, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => setActiveSnippet(m.sourceSnippet)}
+                      className={`p-2 rounded-lg cursor-pointer text-xs transition-colors font-mono ${
+                        activeSnippet === m.sourceSnippet 
+                          ? 'bg-emerald-100 text-emerald-900 border border-emerald-300 font-bold' 
+                          : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200'
+                      }`}
+                    >
+                      {m.sourceSnippet}
+                    </div>
+                  ))}
+
+                  {data.testValues.map((t, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => setActiveSnippet(t.sourceSnippet)}
+                      className={`p-2 rounded-lg cursor-pointer text-xs transition-colors font-mono ${
+                        activeSnippet === t.sourceSnippet 
+                          ? 'bg-emerald-100 text-emerald-900 border border-emerald-300 font-bold' 
+                          : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200'
+                      }`}
+                    >
+                      {t.sourceSnippet}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {activeSnippet && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-950">
+                  <div className="font-bold text-[11px] text-emerald-800 mb-1">
+                    Active Cross-Reference Snippet:
+                  </div>
+                  <p className="font-mono text-[11px]">{activeSnippet}</p>
+                </div>
+              )}
             </div>
           )}
 
           <div className="text-[11px] text-slate-500 bg-white p-3 rounded-xl border border-slate-200">
-            <strong>Human Verification Principle:</strong> Medical AI must never guess unreadable characters. If a medicine or dose is ambiguous, review the original snippet and correct it manually.
+            <strong>Human Verification Principle:</strong> Medical AI must never guess unreadable characters. If a medicine or dose is ambiguous, review the text and correct it manually.
           </div>
         </div>
 

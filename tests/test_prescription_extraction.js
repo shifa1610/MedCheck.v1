@@ -8,7 +8,11 @@
  * 5. Concurrent scans produce isolated, independent results with unique scan IDs
  */
 
-import { extractMedicalRecord } from '../src/services/aiService.js';
+import { 
+  extractMedicalRecord, 
+  cleanAndNormalizePrescriptionText, 
+  formatClinicalDocument 
+} from '../src/services/aiService.js';
 import { validateMedicine } from '../src/services/validationService.js';
 
 let passed = 0;
@@ -143,6 +147,58 @@ async function runPrescriptionTests() {
   
   const typoPanto = validateMedicine('Pantoprazol');
   assert(typoPanto.matchedName === 'Pantoprazole', `Fuzzy matched "Pantoprazol" -> "Pantoprazole"`);
+
+  // Test 7: OCR Character Normalization & Typography Correction
+  console.log('\n[TEST GROUP 7] OCR Character Normalization:');
+  const ocrNoisyText = `
+    Tah. Amoxicillin 5OOmg l-0-l after food
+    1ab. Paracetamol 65Omg SOS
+    Cop. Omeprazole 2Omg l-0-0 before food
+    Px Azithromycin 250rng OD
+    Tab Cefixime 2 0 0 mg BD
+  `;
+  const normalized = cleanAndNormalizePrescriptionText(ocrNoisyText);
+  assert(normalized.includes('Tab. Amoxicillin 500mg 1-0-1 after food'), 'Fixed Tah. -> Tab., 5OOmg -> 500mg, l-0-l -> 1-0-1');
+  assert(normalized.includes('Tab. Paracetamol 650mg SOS'), 'Fixed 1ab. -> Tab., 65Omg -> 650mg');
+  assert(normalized.includes('Cap. Omeprazole 20mg 1-0-0 before food'), 'Fixed Cop. -> Cap., 2Omg -> 20mg, l-0-0 -> 1-0-0');
+  assert(normalized.includes('Rx Azithromycin 250 mg OD'), 'Fixed Px -> Rx, 250rng -> 250 mg');
+  assert(normalized.includes('Tab Cefixime 200mg BD') || normalized.includes('Tab Cefixime 200 mg BD'), 'Fixed 2 0 0 mg -> 200mg');
+
+  // Test 8: End-to-End Extraction on Degraded OCR Prescription with Implicit Strength
+  console.log('\n[TEST GROUP 8] Degraded OCR Prescription Extraction:');
+  const degradedRx = `
+    Apollo Hospitals & Heart Center
+    Dr. Rajesh Sharma, MD (Cardiology)
+    Date: 20/03/2026
+    Patient: Ramesh Kumar
+    1. Tah. Amoxicillin 5OOmg l-0-l after meals for 5 days
+    2. 1ab. Dolo 650 SOS
+    3. Cop. Pantoprazole 4Omg l-0-0 before food
+  `;
+  const degradedRecord = await extractMedicalRecord(degradedRx, { fileName: 'scanned_phone_photo.jpg', skipDelay: true });
+  assert(degradedRecord.medications.length === 3, `Extracted 3 medications from degraded OCR (found: ${degradedRecord.medications.length})`);
+  
+  const degAmox = degradedRecord.medications.find(m => m.name.toLowerCase().includes('amoxicillin'));
+  assert(!!degAmox, 'Amoxicillin extracted from Tah. line');
+  assert(degAmox.dosage === '500mg', `Amoxicillin dosage normalized to 500mg (found: ${degAmox.dosage})`);
+  assert(degAmox.frequency.includes('1-0-1'), `Amoxicillin frequency normalized to 1-0-1 (found: ${degAmox.frequency})`);
+
+  const degDolo = degradedRecord.medications.find(m => m.name.toLowerCase().includes('dolo') || m.name.toLowerCase().includes('paracetamol'));
+  assert(!!degDolo, 'Dolo extracted from 1ab. Dolo 650 line');
+  assert(degDolo.dosage === '650mg', `Dolo implicit strength recognized as 650mg (found: ${degDolo.dosage})`);
+
+  const degPanto = degradedRecord.medications.find(m => m.name.toLowerCase().includes('pantoprazole'));
+  assert(!!degPanto, 'Pantoprazole extracted from Cop. line');
+  assert(degPanto.dosage === '40mg', `Pantoprazole dosage normalized to 40mg (found: ${degPanto.dosage})`);
+  assert(degPanto.frequency.includes('1-0-0'), `Pantoprazole frequency normalized to 1-0-0 (found: ${degPanto.frequency})`);
+
+  // Test 9: Formatted Clinical Document Verification
+  console.log('\n[TEST GROUP 9] Clinical Document Formatter Structure:');
+  assert(typeof degradedRecord.formattedText === 'string' && degradedRecord.formattedText.length > 50, 'formattedText string generated');
+  assert(degradedRecord.formattedText.includes('CLINIC / FACILITY : Apollo Hospitals & Heart Center'), 'Facility section in formatted document');
+  assert(degradedRecord.formattedText.includes('ATTENDING DOCTOR  : Dr. Rajesh Sharma'), 'Doctor section in formatted document');
+  assert(degradedRecord.formattedText.includes('PRESCRIBED MEDICATIONS'), 'Prescriptions section in formatted document');
+  assert(degradedRecord.formattedText.includes('CLINICAL INSTRUCTIONS & ADVICE'), 'Advice section in formatted document');
 
   console.log('\n======================================================');
   console.log(`  ALL PRESCRIPTION TESTS PASSED: ${passed} / ${total} checks successful!`);

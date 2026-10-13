@@ -28,14 +28,14 @@ export const INDIAN_DRUG_CATALOG = [
   { generic: "Ranitidine", brands: ["Rantac", "Aciloc", "Zinetac"], commonStrengths: ["150 mg", "300 mg"], class: "H2 Blocker" },
 
   // Analgesic, Antipyretic & Anti-inflammatory
-  { generic: "Paracetamol", brands: ["Acetaminophen", "Dolo 650", "Calpol", "Crocin", "Pacimol", "Sumo L"], commonStrengths: ["500 mg", "650 mg"], class: "Analgesic / Antipyretic" },
+  { generic: "Paracetamol", brands: ["Acetaminophen", "Dolo", "Dolo 650", "Calpol", "Calpol 650", "Crocin", "Pacimol", "Sumo L"], commonStrengths: ["500 mg", "650 mg"], class: "Analgesic / Antipyretic" },
   { generic: "Ibuprofen", brands: ["Brufen", "Ibugesic", "Combiflam"], commonStrengths: ["200 mg", "400 mg"], class: "NSAID" },
   { generic: "Aceclofenac", brands: ["Hifenac", "Zerodol", "Aceclo"], commonStrengths: ["100 mg"], class: "NSAID" },
   { generic: "Diclofenac", brands: ["Voveran", "Dynapar", "Voltaren"], commonStrengths: ["50 mg"], class: "NSAID" },
 
   // Antibiotics & Antimicrobial
   { generic: "Amoxicillin", brands: ["Mox", "Novamox", "Amoxil"], commonStrengths: ["250 mg", "500 mg"], class: "Penicillin Antibiotic" },
-  { generic: "Amoxicillin and Potassium Clavulanate", brands: ["Augmentin", "Moxikind-CV", "Clavam", "Mega-CV"], commonStrengths: ["375 mg", "625 mg", "1000 mg"], class: "Penicillin + Beta-Lactamase Inhibitor" },
+  { generic: "Amoxicillin and Potassium Clavulanate", brands: ["Augmentin", "Augmentin 625", "Augmentin 375", "Moxikind-CV", "Clavam", "Clavam 625", "Mega-CV"], commonStrengths: ["375 mg", "625 mg", "1000 mg"], class: "Penicillin + Beta-Lactamase Inhibitor" },
   { generic: "Azithromycin", brands: ["Azee", "Azithral", "Zithrox", "Azicip"], commonStrengths: ["250 mg", "500 mg"], class: "Macrolide Antibiotic" },
   { generic: "Ciprofloxacin", brands: ["Ciplox", "Ciprobid", "Cifran"], commonStrengths: ["250 mg", "500 mg"], class: "Fluoroquinolone Antibiotic" },
   { generic: "Levofloxacin", brands: ["Levomac", "Levaquin", "Glevo"], commonStrengths: ["500 mg", "750 mg"], class: "Fluoroquinolone Antibiotic" },

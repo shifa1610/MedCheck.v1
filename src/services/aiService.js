@@ -21,11 +21,23 @@ export const LAB_REFERENCE_DATABASE = {
 };
 
 /**
- * Parses dosage strings (e.g., "500mg", "40 mg", "0.5 g", "100 mcg", "10 ml")
+ * Parses dosage strings (e.g., "500mg", "40 mg", "0.5 g", "100 mcg", "10 ml", or implicit like "Augmentin 625", "Dolo 650")
  */
 function extractDosage(line) {
+  // 1. Explicit unit (e.g., "500mg", "40 mg", "0.5 g", "100 mcg", "10 ml")
   const match = line.match(/\b(\d+(?:\.\d+)?\s*(?:mg|mcg|µg|g|ml|iu|units|%))\b/i);
-  return match ? match[1].replace(/\s+/, '') : null;
+  if (match) return match[1].replace(/\s+/, '');
+
+  // 2. Implicit strength following a medicine name token (e.g. "Dolo 650", "Augmentin 625", "Pan 40", "Telma 20")
+  const implicit = line.match(/\b(?:tab|cap|syp|inj)?\.?\s*[A-Za-z]{3,20}\s+(\d{1,4}(?:\.\d+)?)(?!\s*[-/]\s*\d)\b/i);
+  if (implicit && implicit[1]) {
+    const num = parseFloat(implicit[1]);
+    if (num >= 1 && num <= 2000 && !line.includes(`${implicit[1]} days`) && !line.includes(`${implicit[1]} day`)) {
+      return `${implicit[1]}mg`;
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -381,6 +393,134 @@ function parseLabBiomarkers(rawText) {
 }
 
 /**
+ * Clinical Text Normalizer & OCR Error Corrector
+ * Fixes character misrecognitions, unit typos, split spacing, and frequency formats
+ */
+export function cleanAndNormalizePrescriptionText(rawText) {
+  if (!rawText || typeof rawText !== 'string') return '';
+
+  let cleaned = rawText
+    // Remove control characters (preserve newlines, carriage returns, tabs)
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ')
+    // Normalize unicode dashes, bullets, and quotes
+    .replace(/[\u2013\u2014\u2015]/g, '-')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    // Remove stray OCR noise characters
+    .replace(/[~^|_\u00A9\u00AE\u00AB\u00BB]/g, ' ');
+
+  // 1. Fix broken digits and spaced numbers before units (e.g., "5 0 0 mg" -> "500mg", "6 5 0 mg" -> "650mg")
+  cleaned = cleaned.replace(/\b(\d)\s+(\d)\s+(\d)\s*(mg|ml|mcg|µg|g)\b/gi, '$1$2$3$4');
+  cleaned = cleaned.replace(/\b(\d)\s+(\d)\s*(mg|ml|mcg|µg|g)\b/gi, '$1$2$3');
+
+  // 2. Fix OCR 'O' / 'o' confusion for '0' in numbers (e.g. "5OOmg" -> "500mg", "65Omg" -> "650mg", "25Omg" -> "250mg", "1OOmg" -> "100mg")
+  cleaned = cleaned.replace(/\b(\d+)[oO]{2}\s*(mg|mcg|µg|g|ml)\b/gi, '$100$2');
+  cleaned = cleaned.replace(/\b(\d+)[oO]\s*(mg|mcg|µg|g|ml)\b/gi, '$10$2');
+  cleaned = cleaned.replace(/\b[oO]\.(\d+)\s*(mg|mcg|µg|g|ml)\b/gi, '0.$1$2');
+  cleaned = cleaned.replace(/\b(\d+)[oO](\d+)\s*(mg|mcg|µg|g|ml)\b/gi, '$10$2$3');
+
+  // 3. Fix OCR unit typos (e.g., "500rng" -> "500mg", "650mq" -> "650mg", "10rnl" -> "10ml")
+  cleaned = cleaned.replace(/\b(\d+(?:\.\d+)?)\s*(?:rng|mq|rnp|m9)\b/gi, '$1 mg');
+  cleaned = cleaned.replace(/\b(\d+(?:\.\d+)?)\s*(?:rnl|rni)\b/gi, '$1 ml');
+  cleaned = cleaned.replace(/\b(\d+(?:\.\d+)?)\s*(?:mcq|mc9)\b/gi, '$1 mcg');
+
+  // 4. Fix frequency patterns (e.g. "l-0-l", "1-O-1", "l-O-l", "1 - 0 - 1", "0-0-l")
+  cleaned = cleaned.replace(/\b[lI|1]\s*[-]\s*[0oOQ]\s*[-]\s*[lI|1]\b/g, '1-0-1');
+  cleaned = cleaned.replace(/\b[lI|1]\s*[-]\s*[0oOQ]\s*[-]\s*[0oOQ]\b/g, '1-0-0');
+  cleaned = cleaned.replace(/\b[0oOQ]\s*[-]\s*[0oOQ]\s*[-]\s*[lI|1]\b/g, '0-0-1');
+  cleaned = cleaned.replace(/\b[lI|1]\s*[-]\s*[lI|1]\s*[-]\s*[lI|1]\b/g, '1-1-1');
+  cleaned = cleaned.replace(/\b[0oOQ]\s*[-]\s*[lI|1]\s*[-]\s*[0oOQ]\b/g, '0-1-0');
+  cleaned = cleaned.replace(/\b[lI|1]\s*[-]\s*[lI|1]\s*[-]\s*[lI|1]\s*[-]\s*[lI|1]\b/g, '1-1-1-1');
+
+  // 5. Fix dosage form OCR misreads (e.g. "Tah." / "1ab." -> "Tab.", "Cop." -> "Cap.", "Px" / "Bx" -> "Rx")
+  cleaned = cleaned.replace(/\b(?:Tah|Tsb|1ab|Tob|lab|fab|Talb)\.?\s+/gi, 'Tab. ');
+  cleaned = cleaned.replace(/\b(?:Cop|Csp|Cup)\.?\s+/gi, 'Cap. ');
+  cleaned = cleaned.replace(/\b(?:Svr|Syp|Syr|5yp)\.?\s+/gi, 'Syp. ');
+  cleaned = cleaned.replace(/\b(?:Inj|lnj|1nj)\.?\s+/gi, 'Inj. ');
+  cleaned = cleaned.replace(/\b(?:Px|Bx|B\/|R\/x|R\.)\s+/gi, 'Rx ');
+
+  // 6. Merge line wraps where a medicine name was isolated on a line without dose/schedule
+  const lines = cleaned.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const mergedLines = [];
+  for (let i = 0; i < lines.length; i++) {
+    const cur = lines[i];
+    const next = lines[i + 1];
+
+    const curHasMedPrefix = /\b(?:tab|cap|syp|inj|tablet|capsule|syrup|rx)\b/i.test(cur);
+    const curHasDoseOrFreq = /\b(?:\d+\s*(?:mg|mcg|µg|g|ml)|\d{2,4}|1-0-1|1-0-0|0-0-1|1-1-1|od|bd|bid|tds|tid|qid|sos|prn|hs)\b/i.test(cur);
+    const nextIsNewItem = next && (/^[0-9]+[.)\-]/i.test(next) || /^(?:tab|cap|syp|inj|tablet|capsule|syrup|rx)\b/i.test(next));
+
+    if (next && curHasMedPrefix && !curHasDoseOrFreq && !nextIsNewItem) {
+      mergedLines.push(`${cur} ${next}`);
+      i++; // skip next line as it was merged
+    } else {
+      mergedLines.push(cur);
+    }
+  }
+
+  return mergedLines.join('\n');
+}
+
+/**
+ * Formats clinical prescription and lab data into clean, structured human-readable text
+ */
+export function formatClinicalDocument({
+  title = "Medical Prescription & Clinical Record",
+  facility = "Outpatient Clinic",
+  doctor = "Attending Physician",
+  patientName = null,
+  date = null,
+  medications = [],
+  biomarkers = []
+}) {
+  const parts = [];
+
+  parts.push("================================================================================");
+  parts.push(`  ${(title || "MEDICAL PRESCRIPTION & CLINICAL RECORD").toUpperCase()}`);
+  parts.push("================================================================================");
+
+  if (facility) parts.push(`CLINIC / FACILITY : ${facility}`);
+  if (doctor) parts.push(`ATTENDING DOCTOR  : ${doctor}`);
+  if (patientName) parts.push(`PATIENT NAME      : ${patientName}`);
+  parts.push(`CONSULTATION DATE : ${date || new Date().toISOString().split('T')[0]}`);
+  parts.push("--------------------------------------------------------------------------------");
+
+  if (medications && medications.length > 0) {
+    parts.push(`PRESCRIBED MEDICATIONS (${medications.length} items):`);
+    medications.forEach((med, idx) => {
+      const name = med.name || med.rawName || 'Medication';
+      const dose = med.dosage ? ` ${med.dosage}` : '';
+      const freq = med.frequency ? ` | Schedule: ${med.frequency}` : '';
+      const timing = med.timing && med.timing !== 'As directed' ? ` | Timing: ${med.timing}` : '';
+      const dur = med.duration && !med.duration.includes('physician') ? ` | Duration: ${med.duration}` : '';
+      parts.push(`  ${idx + 1}. ${name}${dose}${freq}${timing}${dur}`);
+    });
+    parts.push("--------------------------------------------------------------------------------");
+  } else {
+    parts.push("PRESCRIBED MEDICATIONS: No distinct medications detected.");
+    parts.push("--------------------------------------------------------------------------------");
+  }
+
+  if (biomarkers && biomarkers.length > 0) {
+    parts.push(`LABORATORY INVESTIGATIONS (${biomarkers.length} tests):`);
+    biomarkers.forEach(b => {
+      const statusBadge = b.status ? ` [${b.status}]` : '';
+      const ref = b.referenceRange ? ` (Ref: ${b.referenceRange})` : '';
+      parts.push(`  • ${b.name}: ${b.value} ${b.unit || ''}${statusBadge}${ref}`);
+    });
+    parts.push("--------------------------------------------------------------------------------");
+  }
+
+  parts.push("CLINICAL INSTRUCTIONS & ADVICE:");
+  parts.push("  • Take all medications strictly at the indicated hours and with food if advised.");
+  parts.push("  • Do not discontinue or adjust prescription dosages without physician consultation.");
+  parts.push("  • Keep this record safely in your MedCheck health locker for future visits.");
+  parts.push("================================================================================");
+
+  return parts.join('\n');
+}
+
+/**
  * Intelligent Medical Record Extraction
  * Strictly extracts data from input text without hardcoded fallbacks
  */
@@ -402,12 +542,13 @@ export async function extractMedicalRecord(input, options = {}) {
     if (input.scanId) scanId = input.scanId;
   }
 
-  const lowerText = rawText.toLowerCase();
+  // 1. Clean and normalize OCR text (fixing OCR confusions, unit typos, split digits)
+  const normalizedText = cleanAndNormalizePrescriptionText(rawText);
 
   // Classify record type based on actual text content
-  const hasRxClues = /\b(rx|tab|cap|syp|inj|tablet|capsule|syrup|mg|dose|dosage|od|bd|bid|tds|tid|qid|sos)\b/i.test(rawText);
-  const hasLabClues = /\b(lab|laboratory|test|blood|serum|glucose|hba1c|cholesterol|creatinine|hemoglobin|specimen)\b/i.test(rawText);
-  const hasDischargeClues = /\b(discharge|admitted|admission|inpatient|surgery|diagnosis|procedure)\b/i.test(rawText);
+  const hasRxClues = /\b(rx|tab|cap|syp|inj|tablet|capsule|syrup|mg|dose|dosage|od|bd|bid|tds|tid|qid|sos)\b/i.test(normalizedText);
+  const hasLabClues = /\b(lab|laboratory|test|blood|serum|glucose|hba1c|cholesterol|creatinine|hemoglobin|specimen)\b/i.test(normalizedText);
+  const hasDischargeClues = /\b(discharge|admitted|admission|inpatient|surgery|diagnosis|procedure)\b/i.test(normalizedText);
 
   let recordType = "prescription";
   if (hasLabClues && !hasRxClues) {
@@ -416,17 +557,34 @@ export async function extractMedicalRecord(input, options = {}) {
     recordType = "discharge";
   }
 
-  // Extract medicines dynamically from text
-  const extractedMedications = parsePrescriptionMedications(rawText);
+  // Extract medicines dynamically from normalized text
+  const extractedMedications = parsePrescriptionMedications(normalizedText);
 
-  // Extract lab tests dynamically from text
-  const { biomarkers, abnormalExplanations } = parseLabBiomarkers(rawText);
+  // Extract lab tests dynamically from normalized text
+  const { biomarkers, abnormalExplanations } = parseLabBiomarkers(normalizedText);
 
   // Extract metadata
-  const doctor = extractDoctor(rawText) || "Attending Physician";
-  const facility = extractFacility(rawText) || (recordType === "prescription" ? "Outpatient Medical Clinic" : "Clinical Laboratory & Diagnostics");
-  const extractedDate = extractDate(rawText) || new Date().toISOString().split("T")[0];
-  const patientName = extractPatientName(rawText);
+  const doctor = extractDoctor(normalizedText) || "Attending Physician";
+  const facility = extractFacility(normalizedText) || (recordType === "prescription" ? "Outpatient Medical Clinic" : "Clinical Laboratory & Diagnostics");
+  const extractedDate = extractDate(normalizedText) || new Date().toISOString().split("T")[0];
+  const patientName = extractPatientName(normalizedText);
+
+  // Structured clinical document formatting
+  const title = recordType === "prescription" 
+    ? `Prescription (${extractedDate})` 
+    : recordType === "discharge" 
+      ? `Discharge Summary (${extractedDate})` 
+      : `Diagnostic Lab Report (${extractedDate})`;
+
+  const formattedText = formatClinicalDocument({
+    title,
+    facility,
+    doctor,
+    patientName,
+    date: extractedDate,
+    medications: extractedMedications,
+    biomarkers
+  });
 
   // Verification status determination
   let verificationStatus = "Verified";
@@ -452,11 +610,9 @@ export async function extractMedicalRecord(input, options = {}) {
     scanId,
     sourceFileName: fileName,
     rawText: rawText.trim(),
-    title: recordType === "prescription" 
-      ? `Prescription (${extractedDate})` 
-      : recordType === "discharge" 
-        ? `Discharge Summary (${extractedDate})` 
-        : `Diagnostic Lab Report (${extractedDate})`,
+    normalizedText: normalizedText.trim(),
+    formattedText: formattedText.trim(),
+    title,
     type: recordType,
     date: extractedDate,
     facility,
