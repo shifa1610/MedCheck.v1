@@ -4,8 +4,11 @@ import mongoose from 'mongoose';
 
 process.env.JWT_SECRET = 'deployment-route-test-secret';
 const { default: apiHandler } = await import('../api/[...path].js');
+const { default: loginHandler } = await import('../api/auth/login.js');
 
-const server = http.createServer((req, res) => apiHandler(req, res));
+const server = http.createServer((req, res) => (
+  req.url?.startsWith('/api/auth/login') ? loginHandler(req, res) : apiHandler(req, res)
+));
 server.listen(0, '127.0.0.1');
 await new Promise(resolve => server.once('listening', resolve));
 

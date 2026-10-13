@@ -197,8 +197,10 @@ available and marks demo or session-only changes as not permanently saved.
 
 ### Deploying to Vercel
 
-The Vercel deployment includes serverless handlers for the Express API under
-`/api/*`. Configure `MONGODB_URI` and `JWT_SECRET` in the Vercel project's
+The Vercel deployment includes explicit serverless function routes for nested
+Express API endpoints such as `/api/auth/login`, `/api/auth/register`, and
+`/api/recognition/handwriting`, plus a catch-all for remaining API paths.
+Configure `MONGODB_URI` and `JWT_SECRET` in the Vercel project's
 environment variables for the environments you deploy. Add `OPENAI_API_KEY`
 and optional `OPENAI_MODEL` to enable Copilot. Do not set `VITE_API_URL` to a
 localhost address in production; the deployed frontend calls its same-origin
