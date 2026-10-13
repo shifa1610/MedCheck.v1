@@ -195,6 +195,15 @@ when the database is connected. `/api/health` reports the database connection
 state. When the API or database is unavailable, the UI keeps sample records
 available and marks demo or session-only changes as not permanently saved.
 
+### Deploying to Vercel
+
+The Vercel deployment includes serverless handlers for the Express API under
+`/api/*`. Configure `MONGODB_URI` and `JWT_SECRET` in the Vercel project's
+environment variables for the environments you deploy. Add `OPENAI_API_KEY`
+and optional `OPENAI_MODEL` to enable Copilot. Do not set `VITE_API_URL` to a
+localhost address in production; the deployed frontend calls its same-origin
+`/api` routes. Redeploy after changing environment variables.
+
 ### AI Health Copilot
 
 Set `OPENAI_API_KEY` in the server-side `.env` file to enable the authenticated
